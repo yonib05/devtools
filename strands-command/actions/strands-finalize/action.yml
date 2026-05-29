@@ -13,24 +13,46 @@ runs:
       id: read-input
       shell: bash
       run: |
-        echo "ref=$(jq -r .branch_name strands-parsed-input.json)" >> $GITHUB_OUTPUT
-        echo "issue_id=$(jq -r .issue_id strands-parsed-input.json)" >> $GITHUB_OUTPUT
-        echo "head_repo=$(jq -r '.head_repo // ""' strands-parsed-input.json)" >> $GITHUB_OUTPUT
-        echo "mode=$(jq -r '.mode // ""' strands-parsed-input.json)" >> $GITHUB_OUTPUT
+        REF="$(jq -r .branch_name strands-parsed-input.json)"
+        ISSUE_ID="$(jq -r .issue_id strands-parsed-input.json)"
+        HEAD_REPO="$(jq -r '.head_repo // ""' strands-parsed-input.json)"
+        MODE="$(jq -r '.mode // ""' strands-parsed-input.json)"
+
+        # Validate ref format
+        if ! [[ "$REF" =~ ^[a-zA-Z0-9/_.@-]+$ ]]; then
+          echo "::error::Invalid ref format: contains disallowed characters"
+          exit 1
+        fi
+
+        # Validate issue_id is numeric
+        if [ -n "$ISSUE_ID" ] && ! [[ "$ISSUE_ID" =~ ^[0-9]+$ ]]; then
+          echo "::error::Invalid issue_id format: must be numeric"
+          exit 1
+        fi
+
+        echo "ref=$REF" >> $GITHUB_OUTPUT
+        echo "issue_id=$ISSUE_ID" >> $GITHUB_OUTPUT
+        echo "head_repo=$HEAD_REPO" >> $GITHUB_OUTPUT
+        echo "mode=$MODE" >> $GITHUB_OUTPUT
 
     # Push code changes before running write commands in case we need to create a pull request
     # Pull requests cannot be created if a branch has no diff with main, so push changes first, then create pr
     - name: Log if ref equals main or is fork PR
       shell: bash
+      env:
+        REF: ${{ steps.read-input.outputs.ref }}
+        DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        HEAD_REPO: ${{ steps.read-input.outputs.head_repo }}
+        MODE: ${{ steps.read-input.outputs.mode }}
       run: |
-        if [ "${{ steps.read-input.outputs.ref }}" = "${{ github.event.repository.default_branch }}" ]; then
+        if [ "$REF" = "$DEFAULT_BRANCH" ]; then
           echo "🚫 Ref is default - skipping push operations to prevent direct commits to default branch"
-        elif [ -n "${{ steps.read-input.outputs.head_repo }}" ]; then
+        elif [ -n "$HEAD_REPO" ]; then
           echo "🚫 Fork PR detected - skipping push operations (no write access to fork)"
-        elif [ "${{ steps.read-input.outputs.mode }}" != "implementer" ]; then
-          echo "🚫 Mode '${{ steps.read-input.outputs.mode }}' is not implementer - skipping push operations"
+        elif [ "$MODE" != "implementer" ]; then
+          echo "🚫 Mode '$MODE' is not implementer - skipping push operations"
         else
-          echo "✅ Ref is '${{ steps.read-input.outputs.ref }}' - push operations will proceed"
+          echo "✅ Ref is '$REF' - push operations will proceed"
         fi
     
     - name: Download repository state artifact
@@ -46,6 +68,7 @@ runs:
       shell: bash
       env:
         GITHUB_TOKEN: ${{ github.token }}
+        REF: ${{ steps.read-input.outputs.ref }}
       run: |
 
         if [ -f "$RUNNER_TEMP/repository_state.tar.gz" ]; then
@@ -53,7 +76,7 @@ runs:
           mkdir -p "$RUNNER_TEMP/temp_git_repo"
           tar -xzf "$RUNNER_TEMP/repository_state.tar.gz" -C "$RUNNER_TEMP/temp_git_repo"
           rm "$RUNNER_TEMP/repository_state.tar.gz"
-          
+
           echo "📁 Changing to repository directory"
           ORIGINAL_DIRECTORY=$(pwd)
           cd "$RUNNER_TEMP/temp_git_repo"
@@ -64,11 +87,11 @@ runs:
           git config --local core.pager cat
           # We need to overwrite this since this is currently set by the previous readonly workflow artifact
           # Overwrite this value with the current token that allows us to push the commit
-          git config --local http."https://github.com/".extraheader "AUTHORIZATION: basic $(echo -n x-access-token:${{ github.token }}| base64)"
+          git config --local http."https://github.com/".extraheader "AUTHORIZATION: basic $(echo -n x-access-token:${GITHUB_TOKEN}| base64)"
 
           # Fetch the remote repository
-          git fetch origin ${{ steps.read-input.outputs.ref }}
-          
+          git fetch origin "$REF"
+
           # Stage and commit any changes first
           if [ -n "$(git status --porcelain)" ]; then
             echo "📝 Changes detected, staging all files"
@@ -76,17 +99,17 @@ runs:
             echo "📝 Committing changes"
             git commit -m "Additional changes from write operations" -n
           fi
-          
+
           # Push if there are differences from remote
-          if ! git diff --quiet HEAD origin/${{ steps.read-input.outputs.ref }}; then
+          if ! git diff --quiet HEAD "origin/$REF"; then
             echo "📝 Differences from remote:"
-            git diff HEAD origin/${{ steps.read-input.outputs.ref }}
-            echo "📤 Pushing changes to ${{ steps.read-input.outputs.ref }}"
-            git push --force origin ${{ steps.read-input.outputs.ref }}
+            git diff HEAD "origin/$REF"
+            echo "📤 Pushing changes to $REF"
+            git push --force origin "$REF"
           else
             echo "📭 No changes to push"
           fi
-          
+
           # Change back and clean up
           cd $ORIGINAL_DIRECTORY
           rm -rf "$RUNNER_TEMP/temp_git_repo"
@@ -147,29 +170,38 @@ runs:
       env:
         GITHUB_TOKEN: ${{ github.token }}
         GITHUB_REPOSITORY: ${{ github.repository }}
+        ISSUE_ID: ${{ steps.read-input.outputs.issue_id }}
+        RUNNER_TEMP_DIR: ${{ runner.temp }}
 
         # Strands Env Vars
         STRANDS_TOOL_CONSOLE_MODE: 'enabled'
         BYPASS_TOOL_CONSENT: 'true'
       run: |
         echo "🚀 Strands Write Executor - Processing write operations"
-        if [ -n "${{ steps.read-input.outputs.issue_id }}" ]; then
-          python devtools/strands-command/scripts/python/write_executor.py "${{ runner.temp }}/write_operations.jsonl" --issue-id "${{ steps.read-input.outputs.issue_id }}"
+        if [ -n "$ISSUE_ID" ]; then
+          python devtools/strands-command/scripts/python/write_executor.py "$RUNNER_TEMP_DIR/write_operations.jsonl" --issue-id "$ISSUE_ID"
         else
-          python devtools/strands-command/scripts/python/write_executor.py "${{ runner.temp }}/write_operations.jsonl"
+          python devtools/strands-command/scripts/python/write_executor.py "$RUNNER_TEMP_DIR/write_operations.jsonl"
         fi
 
     - name: Remove strands-running label
       if: always() && steps.read-input.outputs.issue_id != ''
       uses: actions/github-script@v8
+      env:
+        ISSUE_ID: ${{ steps.read-input.outputs.issue_id }}
       with:
         github-token: ${{ github.token }}
         script: |
+          const issueId = parseInt(process.env.ISSUE_ID, 10);
+          if (isNaN(issueId)) {
+            core.warning('Invalid issue ID, skipping label removal');
+            return;
+          }
           try {
             await github.rest.issues.removeLabel({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: ${{ steps.read-input.outputs.issue_id }},
+              issue_number: issueId,
               name: 'strands-running'
             });
           } catch (error) {
