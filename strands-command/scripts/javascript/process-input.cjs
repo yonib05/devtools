@@ -5,11 +5,16 @@
 const fs = require('fs');
 
 async function getIssueInfo(github, context, inputs) {
-  const issueId = context.eventName === 'workflow_dispatch' 
+  // Use explicit inputs when provided (workflow_dispatch, workflow_call, or a
+  // workflow like dependabot-auto-merge driving the parser from a
+  // pull_request_target event). Fall back to the comment payload only for
+  // issue_comment events, which do not pass inputs.
+  const hasExplicitInput = Boolean(inputs.issue_id);
+  const issueId = hasExplicitInput
     ? inputs.issue_id
     : context.payload.issue.number.toString();
-  const command = context.eventName === 'workflow_dispatch'
-    ? inputs.command
+  const command = hasExplicitInput
+    ? (inputs.command || '')
     : (context.payload.comment.body.match(/^\/strands\s*(.*?)$/m)?.[1]?.trim() || '');
 
   console.log(`Event: ${context.eventName}, Issue ID: ${issueId}, Command: "${command}"`);
