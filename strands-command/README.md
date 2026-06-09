@@ -13,6 +13,7 @@ By default, the strands command will do a few different things:
 You can trigger different agents by passing in a keyword after the `/strands` command:
 - `/strands implement` on an Issue will trigger the "Implementer" agent, and try to implement the issue as a feature request with a Pull Request
 - `/strands release-notes` on an Issue will trigger the "Release Notes" agent, and attempt to create release notes for a new release
+- `/strands dependabot-analyze` on a Pull Request will trigger the "Dependabot Analyze" agent, and assess whether a dependency update is safe to merge
 
 Any text after the `/strands` command will be passed along to the agent as input as well
 - `/strands <agent-keyword> <Input to agent>`
@@ -298,6 +299,7 @@ Executes AI agents with AWS integration and controlled permissions.
 - `aws_secrets_manager_secret_id` (required): AWS Secrets Manager secret ID containing agent configuration (fetches `sessions_bucket`, `langfuse_*`, and `evals_sqs_queue_arn`)
 - `sessions_bucket` (optional): S3 bucket for session storage. Overrides value from Secrets Manager if provided
 - `write_permission` (required): Permission level flag for Read-only Sandbox mode (`true`/`false`)
+- `sanitized_changelog` (optional): Pre-sanitized, untrusted changelog text appended to the agent's task as data. Used by the `dependabot-analyze` flow to give the agent context about a dependency update without exposing raw external content
 
 **Outputs:**
 - Artifact: `repository-state` containing modified repository files (if changes exist)
@@ -392,6 +394,22 @@ Creates high-quality release notes highlighting major features and bug fixes.
 
 **Trigger**:
 - `/strands release-notes` on an Issue
+
+### Dependabot Analyze (`task-dependabot-analyze.sop.md`)
+
+Assesses whether a dependabot dependency update is safe to merge. Runs read-only and posts a single analysis comment with a machine-readable verdict (`safe` / `needs-review` / `breaking`).
+
+**Workflow**: Setup → Understand Change → Assess Repo Impact → (optional) Inspect Upstream → Render Verdict
+
+**Capabilities:**
+- Reads the PR diff and searches the repository for usages of the updated package
+- Consumes a pre-sanitized changelog (passed via the `sanitized_changelog` input) as untrusted data
+- May fetch upstream commit diffs from URL-validated GitHub sources only
+- Emits a verdict block consumed by downstream auto-merge automation
+
+**Trigger**:
+- `/strands dependabot-analyze` on a Pull Request
+- Automatically on dependabot PRs via a repository's dependabot-auto-merge workflow
 
 
 ## Security
