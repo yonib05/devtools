@@ -31,6 +31,10 @@ inputs:
     description: 'SQS queue ARN for eval triggers (optional, can be fetched from Secrets Manager)'
     required: false
     default: ''
+  sanitized_changelog:
+    description: 'Pre-sanitized, untrusted changelog text to provide to the agent as data. Optional.'
+    required: false
+    default: ''
 
 runs:
   using: 'composite'
@@ -216,6 +220,7 @@ runs:
         # Task Configuration
         INPUT_TASK: ${{ steps.read-input.outputs.task_prompt }}
         INPUT_SYSTEM_PROMPT: ${{ steps.read-input.outputs.system_prompt }}
+        SANITIZED_CHANGELOG: ${{ inputs.sanitized_changelog }}
 
         # AWS Configuration
         AWS_REGION: 'us-west-2'

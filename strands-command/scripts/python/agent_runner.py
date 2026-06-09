@@ -267,6 +267,9 @@ def main() -> None:
         task = " ".join(sys.argv[1:])
         if not task.strip():
             raise ValueError("Task cannot be empty")
+        changelog = os.environ.get("SANITIZED_CHANGELOG", "").strip()
+        if changelog:
+            task = f"{task}\n\n{changelog}"
         print(f"🤖 Running agent with task: {task}")
 
         run_agent(task)
