@@ -77,6 +77,10 @@ from strands_tools.utils import console_util
 
 console = console_util.create()
 
+# Total characters of PR diff inlined into a single prompt by get_pr_files before
+# remaining files are listed for on-demand fetch instead of being inlined.
+TOTAL_DIFF_BUDGET_CHARS = 100_000
+
 
 class GitHubOperation(TypedDict):
     """Type definition for GitHub operation records in JSONL files."""
@@ -528,32 +532,49 @@ def get_pr_files(pr_number: int, repo: str | None = None) -> str:
         return result
 
     output = f"Files changed in PR #{pr_number}:\n\n"
-    
+
+    # Bound the total diff size we inline into one prompt rather than capping each
+    # file at a fixed line count: a per-file cap silently hides the tail of any
+    # larger change, so the reviewer reasons about code it never saw. Instead we
+    # inline full patches until a total budget is reached, then list the remaining
+    # files so they can be fetched on demand.
+    used = 0
+    overflow: list[str] = []
+
     for file in result:
         filename = file['filename']
         status = file['status']
         additions = file['additions']
         deletions = file['deletions']
         changes = file['changes']
-        
-        output += f"📄 **{filename}** ({status})\n"
-        output += f"   +{additions} -{deletions} (~{changes} changes)\n"
-        
-        if file.get('patch'):
-            output += f"   Diff:\n"
-            # Limit diff size to avoid overwhelming output
-            patch_lines = file['patch'].split('\n')
-            if len(patch_lines) > 50:
-                output += '\n'.join(patch_lines[:50])
-                output += f"\n   ... (truncated, {len(patch_lines) - 50} more lines)\n"
-            else:
-                output += file['patch']
-            output += "\n"
-        else:
-            output += "   (Binary file or no diff available)\n"
-        
-        output += "\n"
-    
+
+        header = (
+            f"📄 **{filename}** ({status})\n"
+            f"   +{additions} -{deletions} (~{changes} changes)\n"
+        )
+        patch = file.get('patch')
+
+        if not patch:
+            output += header + "   (Binary file or no diff available)\n\n"
+            continue
+
+        if used + len(patch) > TOTAL_DIFF_BUDGET_CHARS:
+            overflow.append(f"{filename} (+{additions} -{deletions})")
+            output += header + "   (diff omitted to stay within budget; fetch on demand)\n\n"
+            continue
+
+        used += len(patch)
+        output += header + "   Diff:\n" + patch + "\n\n"
+
+    if overflow:
+        listing = "\n".join(f"   - {f}" for f in overflow)
+        output += (
+            "Some diffs were omitted to stay within the prompt budget. Fetch their "
+            "full contents on demand (e.g. with the shell tool) rather than skipping "
+            "them:\n"
+            f"{listing}\n"
+        )
+
     console.print(Panel(escape(output), title=f"[bold green]PR #{pr_number} Files", border_style="blue"))
     return output
 
