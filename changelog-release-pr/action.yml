@@ -59,7 +59,7 @@ runs:
       with:
         token: ${{ inputs.github-token }}
         path: target
-        branch: changelog/sync-${{ inputs.source-repo == 'strands-agents/evals' && 'evals' || 'harness' }}-${{ inputs.tag || 'backfill' }}
+        branch: ${{ steps.generate.outputs.branch }}
         title: "docs(changelog): sync ${{ inputs.source-repo }} ${{ inputs.tag || 'backfill' }}"
         body: |
           Automated changelog sync for `${{ inputs.source-repo }}` ${{ inputs.tag || '(backfill)' }}.

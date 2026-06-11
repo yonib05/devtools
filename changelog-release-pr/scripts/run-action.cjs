@@ -44,8 +44,11 @@ async function runAction(github, context, core) {
           user: pr.user ? pr.user.login : null,
         }
       } catch (e) {
-        if (e.status === 404) return null
-        throw e
+        // 404 (deleted PR) and transient errors (403 rate-limit, 5xx) should
+        // degrade this one entry, not abort a whole backfill. Enrichment is
+        // best-effort; the next sync re-enriches.
+        if (e.status !== 404) core.warning(`PR ${repoFull}#${num}: ${e.status || e.message} — skipping enrichment`)
+        return null
       }
     },
   }
@@ -71,9 +74,12 @@ async function runAction(github, context, core) {
 
   core.info(`changelog: wrote ${result.written.length} file(s)`)
   for (const w of result.warnings) core.warning(w)
-  // Expose for the PR body.
+  // Expose for the PR body + a git-safe branch name (tags contain '/' and '.').
+  const sdkSlug = sourceRepo.endsWith('/evals') ? 'evals' : 'harness'
+  const tagSlug = (tag || 'backfill').replace(/[^A-Za-z0-9._-]+/g, '-')
   core.setOutput('written_count', String(result.written.length))
   core.setOutput('warnings', result.warnings.join('\n'))
+  core.setOutput('branch', `changelog/sync-${sdkSlug}-${tagSlug}`)
   return result
 }
 
