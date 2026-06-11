@@ -81,6 +81,11 @@ console = console_util.create()
 # remaining files are listed for on-demand fetch instead of being inlined.
 TOTAL_DIFF_BUDGET_CHARS = 100_000
 
+# When a single file does not fully fit the remaining budget, inline this much of
+# its head (trimmed to a line boundary) so the reviewer always has some inline
+# signal, unless less than this remains.
+MIN_PARTIAL_HEAD_CHARS = 2_000
+
 
 class GitHubOperation(TypedDict):
     """Type definition for GitHub operation records in JSONL files."""
@@ -533,11 +538,10 @@ def get_pr_files(pr_number: int, repo: str | None = None) -> str:
 
     output = f"Files changed in PR #{pr_number}:\n\n"
 
-    # Bound the total diff size we inline into one prompt rather than capping each
-    # file at a fixed line count: a per-file cap silently hides the tail of any
-    # larger change, so the reviewer reasons about code it never saw. Instead we
-    # inline full patches until a total budget is reached, then list the remaining
-    # files so they can be fetched on demand.
+    # Bound total inlined diff by a character budget rather than a per-file line
+    # cap (which silently hid the tail of larger changes). Inline full patches
+    # while the budget allows; for a file that does not fully fit, inline a head
+    # slice so there is always some inline signal, and note the rest is fetchable.
     used = 0
     overflow: list[str] = []
 
@@ -558,13 +562,32 @@ def get_pr_files(pr_number: int, repo: str | None = None) -> str:
             output += header + "   (Binary file or no diff available)\n\n"
             continue
 
-        if used + len(patch) > TOTAL_DIFF_BUDGET_CHARS:
-            overflow.append(f"{filename} (+{additions} -{deletions})")
-            output += header + "   (diff omitted to stay within budget; fetch on demand)\n\n"
+        remaining = TOTAL_DIFF_BUDGET_CHARS - used
+
+        if len(patch) <= remaining:
+            used += len(patch)
+            output += header + "   Diff:\n" + patch + "\n\n"
             continue
 
-        used += len(patch)
-        output += header + "   Diff:\n" + patch + "\n\n"
+        # Patch does not fully fit. Inline a head slice trimmed to a line
+        # boundary if enough budget remains, otherwise defer the whole file.
+        if remaining >= MIN_PARTIAL_HEAD_CHARS:
+            head = patch[:remaining]
+            newline = head.rfind("\n")
+            if newline != -1:
+                head = head[:newline]
+            used += len(head)
+            omitted = len(patch) - len(head)
+            overflow.append(f"{filename} (+{additions} -{deletions}, partially shown)")
+            output += (
+                header
+                + "   Diff (head only):\n"
+                + head
+                + f"\n   ... ({omitted} more chars omitted; fetch full diff on demand)\n\n"
+            )
+        else:
+            overflow.append(f"{filename} (+{additions} -{deletions})")
+            output += header + "   (diff omitted to stay within budget; fetch on demand)\n\n"
 
     if overflow:
         listing = "\n".join(f"   - {f}" for f in overflow)
