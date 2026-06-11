@@ -17,7 +17,8 @@ const KNOWN_TYPES = new Set(['feat', 'fix', 'docs', 'perf', 'refactor', 'test', 
 function parseReleaseBody(body) {
   if (!body) return []
   const out = []
-  for (const raw of body.split('\n')) {
+  // GitHub release bodies use CRLF; normalize so trailing \r doesn't break matches.
+  for (const raw of body.replace(/\r\n?/g, '\n').split('\n')) {
     const li = raw.match(LINE)
     if (!li) continue
     const tail = li[1].trim().match(TAIL)
@@ -53,7 +54,7 @@ const LOOSE_ENTRY = /(@[\w-]+|#\d+|\/pull\/\d+)/
 function countChangelogBullets(body) {
   if (!body) return 0
   let n = 0
-  for (const raw of body.split('\n')) {
+  for (const raw of body.replace(/\r\n?/g, '\n').split('\n')) {
     const li = raw.match(LINE)
     if (li && LOOSE_ENTRY.test(li[1])) n++
   }

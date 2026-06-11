@@ -53,6 +53,15 @@ test('countChangelogBullets counts entry-like bullets, ignores notes', () => {
   assert.equal(countChangelogBullets(''), 0)
 })
 
+test('handles CRLF line endings (real GitHub bodies)', () => {
+  const crlf = "## What's Changed\r\n\r\n* feat(model): x by @a in https://github.com/o/r/pull/1\r\n* fix: y by @b in https://github.com/o/r/pull/2\r\n"
+  const lines = parseReleaseBody(crlf)
+  assert.equal(lines.length, 2)
+  assert.equal(lines[0].scope, 'model')
+  assert.equal(lines[0].title, 'x') // no trailing \r
+  assert.equal(countChangelogBullets(crlf), 2)
+})
+
 test('countChangelogBullets stays loose vs strict parser (drift signal)', () => {
   // PR refs as #123 instead of full URL: loose counter sees them, strict parser does not.
   const drifted = '* updated thing #11\n* fixed thing #12\n* added thing #13'
