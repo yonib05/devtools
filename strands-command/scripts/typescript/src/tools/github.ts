@@ -47,7 +47,11 @@ export async function getPrDiffRaw(prNumber: number, repo?: string): Promise<str
 }
 
 export async function getFileContentsRaw(path: string, ref: string, repo?: string): Promise<string> {
-  const safePath = path.split('/').map(encodeURIComponent).join('/')
+  const segments = path.split('/')
+  if (segments.some((s) => s === '..' || s === '.' || s === '')) {
+    throw new Error(`Invalid file path: ${path}`)
+  }
+  const safePath = segments.map(encodeURIComponent).join('/')
   const data = await _http.request('GET', `contents/${safePath}?ref=${encodeURIComponent(ref)}`, repo, undefined)
   // The contents API returns base64; decode so the reviewing agent sees real text.
   if (data && typeof data === 'object' && 'content' in data && typeof (data as any).content === 'string') {
@@ -60,6 +64,10 @@ export async function getFileContentsRaw(path: string, ref: string, repo?: strin
 export async function getFileHistoryRaw(path: string, repo?: string): Promise<string> {
   // Recent commits touching this file — the history lens's data source
   // (no shell/git in the TS runner; history comes from the API).
+  const segments = path.split('/')
+  if (segments.some((s) => s === '..' || s === '.' || s === '')) {
+    throw new Error(`Invalid file path: ${path}`)
+  }
   const data = await _http.request('GET', `commits?path=${encodeURIComponent(path)}&per_page=20`, repo, undefined)
   return JSON.stringify(data)
 }
@@ -71,6 +79,7 @@ export interface AddPrCommentArgs {
   path?: string
   line?: number
   startLine?: number
+  commitId?: string
   repo?: string
 }
 
@@ -81,6 +90,10 @@ export async function addPrComment(mode: WriteMode, args: AddPrCommentArgs): Pro
       : `issues/${args.prNumber}/comments`
     const body: Record<string, unknown> = { body: args.body }
     if (args.path) {
+      if (!args.commitId) {
+        throw new Error('commitId is required for inline PR comments')
+      }
+      body.commit_id = args.commitId
       body.path = args.path
       body.line = args.line
       body.side = 'RIGHT'

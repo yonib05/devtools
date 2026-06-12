@@ -1,7 +1,7 @@
 // tests/github.test.ts
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { existsSync, rmSync, readFileSync } from 'node:fs'
-import { getPrComments, addPrComment, getFileContentsRaw, _http } from '../src/tools/github'
+import { getPrComments, addPrComment, getFileContentsRaw, getFileHistoryRaw, _http } from '../src/tools/github'
 import { ARTIFACT_PATH } from '../src/tools/deferredWrite'
 
 // _http is the indirection seam: { request } object whose property tests replace.
@@ -46,10 +46,37 @@ describe('github tools', () => {
   it('addPrComment inline range posts to pulls endpoint with start_line', async () => {
     const spy = vi.spyOn(_http, 'request').mockResolvedValue({ id: 5 })
     await addPrComment({ write: true }, {
-      prNumber: 7, body: 'hi', path: 'a.ts', line: 10, startLine: 8, repo: 'o/r',
+      prNumber: 7, body: 'hi', path: 'a.ts', line: 10, startLine: 8, commitId: 'deadbeef', repo: 'o/r',
     })
     expect(spy).toHaveBeenCalledWith('POST', 'pulls/7/comments', 'o/r', {
-      body: 'hi', path: 'a.ts', line: 10, side: 'RIGHT', start_line: 8, start_side: 'RIGHT',
+      body: 'hi', commit_id: 'deadbeef', path: 'a.ts', line: 10, side: 'RIGHT', start_line: 8, start_side: 'RIGHT',
     })
+  })
+
+  it('addPrComment inline without commitId throws', async () => {
+    const spy = vi.spyOn(_http, 'request').mockResolvedValue({ id: 1 })
+    await expect(addPrComment({ write: true }, {
+      prNumber: 7, body: 'hi', path: 'a.ts', line: 10, repo: 'o/r',
+    })).rejects.toThrow(/commitId/)
+    expect(spy).not.toHaveBeenCalled()
+  })
+
+  it('getFileContentsRaw rejects dot-segment traversal paths', async () => {
+    const spy = vi.spyOn(_http, 'request').mockResolvedValue({})
+    await expect(getFileContentsRaw('../../../../user', 'abc', 'o/r')).rejects.toThrow(/Invalid file path/)
+    expect(spy).not.toHaveBeenCalled()
+  })
+
+  it('getFileContentsRaw accepts normal nested paths', async () => {
+    vi.spyOn(_http, 'request').mockResolvedValue({
+      content: Buffer.from('x', 'utf8').toString('base64'), encoding: 'base64',
+    })
+    await expect(getFileContentsRaw('src/tools/github.ts', 'abc', 'o/r')).resolves.toContain('x')
+  })
+
+  it('getFileHistoryRaw rejects dot-segment paths', async () => {
+    const spy = vi.spyOn(_http, 'request').mockResolvedValue([])
+    await expect(getFileHistoryRaw('..', 'o/r')).rejects.toThrow(/Invalid file path/)
+    expect(spy).not.toHaveBeenCalled()
   })
 })
