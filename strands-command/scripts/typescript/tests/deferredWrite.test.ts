@@ -30,4 +30,18 @@ describe('recordOrCall', () => {
     expect(result).toBe('posted')
     expect(existsSync(ARTIFACT_PATH)).toBe(false)
   })
+
+  it('propagates call errors in write mode', async () => {
+    await expect(recordOrCall(
+      { write: true }, 'addPrComment', {}, async () => { throw new Error('boom') },
+    )).rejects.toThrow('boom')
+  })
+
+  it('appends one JSONL line per deferred call', async () => {
+    await recordOrCall({ write: false }, 'a', { n: 1 }, async () => 'x')
+    await recordOrCall({ write: false }, 'b', { n: 2 }, async () => 'y')
+    const lines = readFileSync(ARTIFACT_PATH, 'utf8').trim().split('\n')
+    expect(lines).toHaveLength(2)
+    expect(lines.map((l) => JSON.parse(l).function)).toEqual(['a', 'b'])
+  })
 })

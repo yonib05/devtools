@@ -1,4 +1,4 @@
-import { appendFileSync, mkdirSync } from 'node:fs'
+import { appendFile, mkdir } from 'node:fs/promises'
 import { dirname } from 'node:path'
 
 export const ARTIFACT_PATH = '.artifact/write_operations.jsonl'
@@ -29,7 +29,9 @@ export async function recordOrCall<T>(
     function: fnName,
     kwargs,
   }
-  mkdirSync(dirname(ARTIFACT_PATH), { recursive: true })
-  appendFileSync(ARTIFACT_PATH, JSON.stringify(entry) + '\n')
+  await mkdir(dirname(ARTIFACT_PATH), { recursive: true })
+  // Single-process runner appends small lines; concurrent interleaving is not
+  // a concern here. Revisit if the runner ever becomes multi-process.
+  await appendFile(ARTIFACT_PATH, JSON.stringify(entry) + '\n')
   return `Operation deferred: ${fnName}`
 }

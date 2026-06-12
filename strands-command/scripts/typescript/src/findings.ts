@@ -3,6 +3,8 @@ import { z } from 'zod'
 export const LENSES = ['adherence', 'api', 'bug', 'history', 'test'] as const
 
 export const FindingSchema = z.object({
+  // Deliberately a free string, not z.enum(LENSES): the custom_reviewer
+  // meta-agent emits findings under ad-hoc lens names.
   lens: z.string(),
   description: z.string(),
   file: z.string(),

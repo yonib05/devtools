@@ -26,4 +26,8 @@ describe('scoreAndFilter', () => {
   it('exposes a threshold of 80', () => {
     expect(THRESHOLD).toBe(80)
   })
+
+  it('returns empty for empty input', () => {
+    expect(scoreAndFilter([])).toEqual([])
+  })
 })
