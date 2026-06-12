@@ -23,8 +23,25 @@ test('backfill writes one file per in-scope release', async () => {
     writeFile: async (p, c) => { written[p] = c },
   })
   assert.deepEqual(Object.keys(written), ['site/src/content/changelog/harness/python-v1.42.0.md'])
-  assert.match(written['site/src/content/changelog/harness/python-v1.42.0.md'], /area-model|area/) // enriched
+  // enrichment landed: area-model label → areas: [model]
+  assert.match(written['site/src/content/changelog/harness/python-v1.42.0.md'], /areas: \[model\]/)
   assert.deepEqual(res.warnings, [])
+})
+
+test('skipExisting skips releases with files and never calls enrichment for them', async () => {
+  let prCalls = 0
+  const client = {
+    ...fakeClient(),
+    getPr: async () => { prCalls++; return { labels: [], merge_commit_sha: 'abc1234', user: 'x' } },
+  }
+  const written = {}
+  const res = await run({
+    repo: 'strands-agents/harness-sdk', mode: 'backfill', skipExisting: true, client,
+    readExisting: async () => '---\nsdk: harness\n---\n', // every file already exists
+    writeFile: async (p, c) => { written[p] = c },
+  })
+  assert.deepEqual(res.written, [])
+  assert.equal(prCalls, 0) // existence checked BEFORE enrichment
 })
 
 test('single mode writes only the given tag', async () => {

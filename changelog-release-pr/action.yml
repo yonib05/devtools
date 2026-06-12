@@ -12,6 +12,10 @@ inputs:
     description: 'single | backfill'
     required: false
     default: 'single'
+  skip-existing:
+    description: 'In backfill mode, only generate files for releases without one (cheap daily backstop; avoids re-enrichment API cost and never regresses existing files). Set false for a full refresh.'
+    required: false
+    default: 'false'
   github-token:
     description: 'Token to read releases/PRs and open the PR. Needs pull-requests:write (and contents:write) on target-repo.'
     required: true
@@ -47,6 +51,7 @@ runs:
         SOURCE_REPO: ${{ inputs.source-repo }}
         TAG: ${{ inputs.tag }}
         MODE: ${{ inputs.mode }}
+        SKIP_EXISTING: ${{ inputs.skip-existing }}
         TARGET_DIR: ${{ github.workspace }}/target
       with:
         github-token: ${{ inputs.github-token }}

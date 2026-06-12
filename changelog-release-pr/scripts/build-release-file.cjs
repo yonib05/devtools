@@ -13,12 +13,22 @@ function fileNameFor(sdk, language, version) {
 /**
  * @param {string} repo  the SOURCE repo the release belongs to
  * @param {{tag_name:string, published_at:string, html_url:string, body:string|null}} release
- * @param {{enrich:(prRepo:string,pr:number)=>Promise<{areas:string[],breaking:boolean,commit:string|null,author:string|null}>, readExisting:(path:string)=>Promise<string|null>}} deps
+ * @param {{enrich:(prRepo:string,pr:number)=>Promise<{areas:string[],breaking:boolean,commit:string|null,author:string|null}>, readExisting:(path:string)=>Promise<string|null>, skipExisting?:boolean}} deps
  * @returns {Promise<{path:string, contents:string, warning?:string}|null>}
  */
 async function buildReleaseFile(repo, release, deps) {
   const meta = tagToMeta(repo, release.tag_name)
   if (!meta) return null
+
+  const path = `site/src/content/changelog/${fileNameFor(meta.sdk, meta.language, meta.version)}`
+  const existing = await deps.readExisting(path)
+
+  // skipExisting (used by the daily cron backstop): only generate files for
+  // releases that don't have one yet. Checked BEFORE enrichment so a skipped
+  // release costs zero PR API calls, and existing files (possibly carrying
+  // richer enrichment from when labels were fresher) are never regressed by a
+  // rate-limited re-run. A full refresh is an explicit backfill dispatch.
+  if (deps.skipExisting && existing) return null
 
   const parsed = parseReleaseBody(release.body)
 
@@ -63,8 +73,6 @@ async function buildReleaseFile(repo, release, deps) {
     entries,
   }
 
-  const path = `site/src/content/changelog/${fileNameFor(meta.sdk, meta.language, meta.version)}`
-  const existing = await deps.readExisting(path)
   const contents = existing ? mergePreserving(file, existing) : renderMarkdown(file)
   return warning ? { path, contents, warning } : { path, contents }
 }

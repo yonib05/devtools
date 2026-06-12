@@ -11,6 +11,7 @@ const { enrichFromPr } = require('./enrich.cjs')
  *   repo:string,
  *   mode:'single'|'backfill',
  *   tag?:string,
+ *   skipExisting?:boolean,
  *   client:{ listReleases:(repo:string)=>Promise<any[]>, getRelease:(repo:string,tag:string)=>Promise<any|null>, getPr:(repo:string,num:number)=>Promise<any|null> },
  *   readExisting:(path:string)=>Promise<string|null>,
  *   writeFile:(path:string,contents:string)=>Promise<void>,
@@ -33,6 +34,7 @@ async function run(opts) {
   const deps = {
     enrich: (prRepo, pr) => enrichFromPr(prRepo, pr, opts.client.getPr),
     readExisting: opts.readExisting,
+    skipExisting: opts.skipExisting === true,
   }
 
   const written = []

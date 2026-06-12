@@ -17,6 +17,7 @@ async function runAction(github, context, core) {
   const mode = process.env.MODE === 'backfill' ? 'backfill' : 'single'
   const tag = process.env.TAG || undefined
   const targetDir = process.env.TARGET_DIR
+  const skipExisting = process.env.SKIP_EXISTING === 'true'
 
   const client = {
     listReleases: async (repoFull) => {
@@ -57,6 +58,7 @@ async function runAction(github, context, core) {
     repo: sourceRepo,
     mode,
     tag,
+    skipExisting,
     client,
     readExisting: async (p) => {
       try {
