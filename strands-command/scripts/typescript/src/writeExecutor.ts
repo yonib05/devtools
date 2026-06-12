@@ -1,5 +1,6 @@
 // src/writeExecutor.ts
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, realpathSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { addPrComment } from './tools/github.js'
 import { ARTIFACT_PATH, type WriteOperation } from './tools/deferredWrite.js'
 
@@ -55,6 +56,18 @@ async function main(): Promise<void> {
 }
 
 // Run as a script (finalize step) but not when imported by tests.
-if (import.meta.url === `file://${process.argv[1]}`) {
-  void main()
+function isMain(): boolean {
+  if (!process.argv[1]) return false
+  try {
+    return realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1])
+  } catch {
+    return false
+  }
+}
+
+if (isMain()) {
+  main().catch((e) => {
+    console.error(String(e))
+    process.exit(1)
+  })
 }

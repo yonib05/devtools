@@ -36,14 +36,28 @@ async function githubRequest(
 export const _http = { request: githubRequest }
 
 // ---- Read helpers ----
+const PAGE_SIZE = 100
+const MAX_PAGES = 10
+
+async function paginate(endpointBase: string, repo?: string): Promise<unknown[]> {
+  const all: unknown[] = []
+  for (let page = 1; page <= MAX_PAGES; page++) {
+    const data = await _http.request('GET', `${endpointBase}&page=${page}`, repo, undefined)
+    if (!Array.isArray(data)) return data === null || data === undefined ? all : [...all, data]
+    all.push(...data)
+    if (data.length < PAGE_SIZE) return all
+  }
+  // Hard bound hit: surface it rather than silently truncating.
+  all.push({ warning: `pagination capped at ${MAX_PAGES * PAGE_SIZE} items; more exist` })
+  return all
+}
+
 export async function getPrComments(prNumber: number, repo?: string): Promise<string> {
-  const data = await _http.request('GET', `issues/${prNumber}/comments?per_page=100`, repo, undefined)
-  return JSON.stringify(data)
+  return JSON.stringify(await paginate(`issues/${prNumber}/comments?per_page=${PAGE_SIZE}`, repo))
 }
 
 export async function getPrDiffRaw(prNumber: number, repo?: string): Promise<string> {
-  const data = await _http.request('GET', `pulls/${prNumber}/files?per_page=100`, repo, undefined)
-  return JSON.stringify(data)
+  return JSON.stringify(await paginate(`pulls/${prNumber}/files?per_page=${PAGE_SIZE}`, repo))
 }
 
 export async function getFileContentsRaw(path: string, ref: string, repo?: string): Promise<string> {

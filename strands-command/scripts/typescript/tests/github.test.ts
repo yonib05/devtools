@@ -13,8 +13,19 @@ describe('github tools', () => {
   it('getPrComments calls the issue comments endpoint', async () => {
     const spy = vi.spyOn(_http, 'request').mockResolvedValue([{ id: 1, body: 'x' }])
     const out = await getPrComments(7, 'o/r')
-    expect(spy).toHaveBeenCalledWith('GET', 'issues/7/comments?per_page=100', 'o/r', undefined)
+    expect(spy).toHaveBeenCalledWith('GET', 'issues/7/comments?per_page=100&page=1', 'o/r', undefined)
     expect(out).toContain('x')
+  })
+
+  it('paginates past the first full page', async () => {
+    const page1 = Array.from({ length: 100 }, (_, i) => ({ id: i }))
+    const page2 = [{ id: 100 }]
+    const spy = vi.spyOn(_http, 'request')
+      .mockResolvedValueOnce(page1)
+      .mockResolvedValueOnce(page2)
+    const out = JSON.parse(await getPrComments(7, 'o/r'))
+    expect(spy).toHaveBeenCalledTimes(2)
+    expect(out).toHaveLength(101)
   })
 
   it('getFileContentsRaw decodes base64 content', async () => {

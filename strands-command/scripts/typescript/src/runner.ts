@@ -1,6 +1,8 @@
+import { realpathSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { resolveMode } from './modes/registry.js'
 
-function parseCommand(raw: string): string {
+export function parseCommand(raw: string): string {
   // Accept "/strands-ts review ..." or "review ..."; take the first word after the trigger.
   const cleaned = raw.replace(/^\/strands-ts\s*/i, '').trim()
   return cleaned.split(/\s+/)[0] ?? ''
@@ -22,6 +24,18 @@ async function main(): Promise<void> {
 }
 
 // Run as a script but not when imported.
-if (import.meta.url === `file://${process.argv[1]}`) {
-  void main()
+function isMain(): boolean {
+  if (!process.argv[1]) return false
+  try {
+    return realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1])
+  } catch {
+    return false
+  }
+}
+
+if (isMain()) {
+  main().catch((e) => {
+    console.error(String(e))
+    process.exit(1)
+  })
 }
