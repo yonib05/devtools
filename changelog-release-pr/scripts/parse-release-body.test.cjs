@@ -40,6 +40,16 @@ test('empty/undefined body yields no entries', () => {
   assert.deepEqual(parseReleaseBody(null), [])
 })
 
+test('bot authors with bracket suffix parse cleanly (no title pollution)', () => {
+  const lines = parseReleaseBody(
+    '* chore(deps): bump uuid from 10.0.0 to 13.0.0 by @dependabot[bot] in https://github.com/o/r/pull/625'
+  )
+  assert.equal(lines.length, 1)
+  assert.equal(lines[0].title, 'bump uuid from 10.0.0 to 13.0.0')
+  assert.equal(lines[0].author, 'dependabot[bot]')
+  assert.equal(lines[0].pr, 625)
+})
+
 test('non-conventional line falls back to type other', () => {
   const lines = parseReleaseBody('* just did a thing by @x in https://github.com/o/r/pull/9')
   assert.equal(lines[0].type, 'other')

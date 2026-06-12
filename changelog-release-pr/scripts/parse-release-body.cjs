@@ -6,7 +6,8 @@
 
 const LINE = /^\s*[-*]\s+(.*)$/
 // "<msg> by @<author> in <pr-url>"  OR  "<msg> in <pr-url>"
-const TAIL = /^(.*?)(?:\s+by\s+@([\w-]+))?\s+in\s+https?:\/\/github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)\s*$/i
+// Author logins may carry a bracket suffix for apps/bots, e.g. dependabot[bot].
+const TAIL = /^(.*?)(?:\s+by\s+@([\w-]+(?:\[[\w-]+\])?))?\s+in\s+https?:\/\/github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)\s*$/i
 const CONVENTIONAL = /^(feat|fix|docs|style|refactor|perf|test|chore|build|ci|revert)(?:\(([^)]+)\))?(!)?:\s*(.+)$/i
 const KNOWN_TYPES = new Set(['feat', 'fix', 'docs', 'perf', 'refactor', 'test', 'chore'])
 // GitHub's "## New Contributors" lines: "@login made their first contribution in <pr-url>".
