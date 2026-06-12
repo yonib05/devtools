@@ -49,6 +49,11 @@ export async function getPrDiffRaw(prNumber: number, repo?: string): Promise<str
 export async function getFileContentsRaw(path: string, ref: string, repo?: string): Promise<string> {
   const safePath = path.split('/').map(encodeURIComponent).join('/')
   const data = await _http.request('GET', `contents/${safePath}?ref=${encodeURIComponent(ref)}`, repo, undefined)
+  // The contents API returns base64; decode so the reviewing agent sees real text.
+  if (data && typeof data === 'object' && 'content' in data && typeof (data as any).content === 'string') {
+    const decoded = Buffer.from((data as any).content, 'base64').toString('utf8')
+    return JSON.stringify({ path, ref, content: decoded })
+  }
   return JSON.stringify(data)
 }
 

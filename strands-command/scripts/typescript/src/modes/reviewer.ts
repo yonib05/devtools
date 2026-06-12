@@ -14,7 +14,8 @@ export interface ModeContext {
 export async function runReviewer(ctx: ModeContext): Promise<void> {
   const orchestrator = buildOrchestrator(ctx.repo)
   const result = await orchestrator.invoke(
-    `Review pull request #${ctx.prNumber} in ${ctx.repo}.`,
+    `Review pull request #${ctx.prNumber} in ${ctx.repo}. The PR head commit is ${ctx.headSha}; ` +
+    `use it as the ref when fetching file contents.`,
   )
   const parsed = ReviewOutputSchema.safeParse(result.structuredOutput)
   if (!parsed.success) {

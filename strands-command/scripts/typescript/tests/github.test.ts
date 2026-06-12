@@ -1,7 +1,7 @@
 // tests/github.test.ts
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { existsSync, rmSync, readFileSync } from 'node:fs'
-import { getPrComments, addPrComment, _http } from '../src/tools/github'
+import { getPrComments, addPrComment, getFileContentsRaw, _http } from '../src/tools/github'
 import { ARTIFACT_PATH } from '../src/tools/deferredWrite'
 
 // _http is the indirection seam: { request } object whose property tests replace.
@@ -15,6 +15,15 @@ describe('github tools', () => {
     const out = await getPrComments(7, 'o/r')
     expect(spy).toHaveBeenCalledWith('GET', 'issues/7/comments?per_page=100', 'o/r', undefined)
     expect(out).toContain('x')
+  })
+
+  it('getFileContentsRaw decodes base64 content', async () => {
+    vi.spyOn(_http, 'request').mockResolvedValue({
+      content: Buffer.from('hello world', 'utf8').toString('base64'),
+      encoding: 'base64',
+    })
+    const out = await getFileContentsRaw('a.ts', 'abc123', 'o/r')
+    expect(out).toContain('hello world')
   })
 
   it('addPrComment defers when write disabled', async () => {
