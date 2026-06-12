@@ -542,6 +542,9 @@ def get_pr_files(pr_number: int, repo: str | None = None) -> str:
     # cap (which silently hid the tail of larger changes). Inline full patches
     # while the budget allows; for a file that does not fully fit, inline a head
     # slice so there is always some inline signal, and note the rest is fetchable.
+    # The budget is consumed in GitHub API file order, so a large early file can
+    # push later files into overflow; this order dependence is accepted (we do not
+    # sort, to keep inline output in the same order the API returns).
     used = 0
     overflow: list[str] = []
 
@@ -571,11 +574,14 @@ def get_pr_files(pr_number: int, repo: str | None = None) -> str:
 
         # Patch does not fully fit. Inline a head slice trimmed to a line
         # boundary if enough budget remains, otherwise defer the whole file.
+        head = ""
         if remaining >= MIN_PARTIAL_HEAD_CHARS:
             head = patch[:remaining]
             newline = head.rfind("\n")
             if newline != -1:
                 head = head[:newline]
+
+        if head:
             used += len(head)
             omitted = len(patch) - len(head)
             overflow.append(f"{filename} (+{additions} -{deletions}, partially shown)")
@@ -586,6 +592,9 @@ def get_pr_files(pr_number: int, repo: str | None = None) -> str:
                 + f"\n   ... ({omitted} more chars omitted; fetch full diff on demand)\n\n"
             )
         else:
+            # Either too little budget remains for a head slice, or trimming to a
+            # line boundary left an empty head (patch starts with a newline);
+            # defer the whole file rather than emit an empty "head only" diff.
             overflow.append(f"{filename} (+{additions} -{deletions})")
             output += header + "   (diff omitted to stay within budget; fetch on demand)\n\n"
 
