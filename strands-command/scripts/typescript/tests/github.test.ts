@@ -13,7 +13,7 @@ describe('github tools', () => {
   it('getPrComments calls the issue comments endpoint', async () => {
     const spy = vi.spyOn(_http, 'request').mockResolvedValue([{ id: 1, body: 'x' }])
     const out = await getPrComments(7, 'o/r')
-    expect(spy).toHaveBeenCalledWith('GET', 'issues/7/comments', 'o/r', undefined)
+    expect(spy).toHaveBeenCalledWith('GET', 'issues/7/comments?per_page=100', 'o/r', undefined)
     expect(out).toContain('x')
   })
 
@@ -32,5 +32,15 @@ describe('github tools', () => {
     const res = await addPrComment({ write: true }, { prNumber: 7, body: 'hi', repo: 'o/r' })
     expect(spy).toHaveBeenCalledOnce()
     expect(res).toContain('99')
+  })
+
+  it('addPrComment inline range posts to pulls endpoint with start_line', async () => {
+    const spy = vi.spyOn(_http, 'request').mockResolvedValue({ id: 5 })
+    await addPrComment({ write: true }, {
+      prNumber: 7, body: 'hi', path: 'a.ts', line: 10, startLine: 8, repo: 'o/r',
+    })
+    expect(spy).toHaveBeenCalledWith('POST', 'pulls/7/comments', 'o/r', {
+      body: 'hi', path: 'a.ts', line: 10, side: 'RIGHT', start_line: 8, start_side: 'RIGHT',
+    })
   })
 })

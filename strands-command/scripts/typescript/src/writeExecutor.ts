@@ -28,14 +28,16 @@ export async function replayOperations(
       const fn = writeFns[op.function]
       if (!fn) { console.error(`Unknown function: ${op.function}`); failed++; continue }
       // Repo guard: the artifact is produced while an agent runs; never let a
-      // recorded op write outside the repo this workflow serves.
+      // recorded op write outside the repo this workflow serves. Undefined
+      // repo is pinned to the expected repo rather than trusted to fallbacks.
       const target = op.kwargs?.repo
       if (target !== undefined && target !== expectedRepo) {
         console.error(`Rejected op targeting foreign repo: ${String(target)}`)
         failed++
         continue
       }
-      await fn({ write: true }, op.kwargs)
+      const kwargs = { ...op.kwargs, repo: expectedRepo }
+      await fn({ write: true }, kwargs)
       ok++
     } catch (e) {
       console.error(`Replay error: ${String(e)}`)

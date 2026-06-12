@@ -37,17 +37,18 @@ export const _http = { request: githubRequest }
 
 // ---- Read helpers ----
 export async function getPrComments(prNumber: number, repo?: string): Promise<string> {
-  const data = await _http.request('GET', `issues/${prNumber}/comments`, repo, undefined)
+  const data = await _http.request('GET', `issues/${prNumber}/comments?per_page=100`, repo, undefined)
   return JSON.stringify(data)
 }
 
 export async function getPrDiffRaw(prNumber: number, repo?: string): Promise<string> {
-  const data = await _http.request('GET', `pulls/${prNumber}/files`, repo, undefined)
+  const data = await _http.request('GET', `pulls/${prNumber}/files?per_page=100`, repo, undefined)
   return JSON.stringify(data)
 }
 
 export async function getFileContentsRaw(path: string, ref: string, repo?: string): Promise<string> {
-  const data = await _http.request('GET', `contents/${path}?ref=${ref}`, repo, undefined)
+  const safePath = path.split('/').map(encodeURIComponent).join('/')
+  const data = await _http.request('GET', `contents/${safePath}?ref=${encodeURIComponent(ref)}`, repo, undefined)
   return JSON.stringify(data)
 }
 

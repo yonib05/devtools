@@ -25,6 +25,16 @@ describe('replayOperations', () => {
     expect(fake.mock.calls[0][1]).toEqual({ prNumber: 1, body: 'a', repo: 'o/r' })
   })
 
+  it('pins undefined kwargs.repo to the expected repo', async () => {
+    const fake = vi.fn().mockResolvedValue('ok')
+    writeFileSync(TMP, JSON.stringify(
+      { timestamp: 't', function: 'addPrComment', kwargs: { prNumber: 1, body: 'a' } },
+    ) + '\n')
+    const { ok } = await replayOperations(TMP, { addPrComment: fake })
+    expect(ok).toBe(1)
+    expect(fake.mock.calls[0][1].repo).toBe('o/r')
+  })
+
   it('rejects an operation targeting a different repo', async () => {
     const fake = vi.fn().mockResolvedValue('ok')
     writeFileSync(TMP, JSON.stringify(
