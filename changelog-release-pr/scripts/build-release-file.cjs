@@ -75,6 +75,23 @@ async function buildReleaseFile(repo, release, deps) {
     })
   }
 
+  // New contributors: language-gate like entries, with one deliberate
+  // difference — a first PR that touches NO sdk dir (docs/ci/site) is still
+  // celebrated in BOTH streams (entries with no language are dropped as noise;
+  // people aren't noise). Unknown file info → also kept in both.
+  let newContributors = parseNewContributors(release.body)
+  if (isMonorepoStream) {
+    const gated = []
+    for (const c of newContributors) {
+      const enr = await deps.enrich(repo, c.pr)
+      const langs = enr.languages
+      if (!Array.isArray(langs) || langs.length === 0 || langs.includes(meta.language)) {
+        gated.push(c)
+      }
+    }
+    newContributors = gated
+  }
+
   const file = {
     sdk: meta.sdk,
     language: meta.language,
@@ -84,7 +101,7 @@ async function buildReleaseFile(repo, release, deps) {
     releaseUrl: release.html_url,
     packageUrl: getPackageUrl(meta.sdk, meta.language, meta.version),
     entries,
-    newContributors: parseNewContributors(release.body),
+    newContributors,
   }
 
   const contents = existing ? mergePreserving(file, existing) : renderMarkdown(file)

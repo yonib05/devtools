@@ -103,6 +103,37 @@ test('pre-monorepo and evals releases are not language-filtered', async () => {
   assert.match(ev.contents, /eval thing/)
 })
 
+test('new contributors are language-gated, but docs/ci-only ones appear in both streams', async () => {
+  const body = [
+    '* feat: x by @a in https://github.com/strands-agents/harness-sdk/pull/1',
+    '',
+    '## New Contributors',
+    '* @pydev made their first contribution in https://github.com/strands-agents/harness-sdk/pull/10',
+    '* @tsdev made their first contribution in https://github.com/strands-agents/harness-sdk/pull/11',
+    '* @docsdev made their first contribution in https://github.com/strands-agents/harness-sdk/pull/12',
+    '* @mystery made their first contribution in https://github.com/strands-agents/harness-sdk/pull/13',
+  ].join('\n')
+  const langByPr = { 1: ['python'], 10: ['python'], 11: ['typescript'], 12: [], 13: null }
+  const deps = {
+    enrich: async (_r, pr) => ({ areas: [], breaking: false, commit: null, author: null, languages: langByPr[pr] }),
+    readExisting: async () => null,
+  }
+  const py = await buildReleaseFile('strands-agents/harness-sdk',
+    { tag_name: 'python/v1.43.0', published_at: '2026-06-12T00:00:00Z', html_url: 'h', body }, deps)
+  // python stream: pydev (python), docsdev (neither → both), mystery (unknown → both); NOT tsdev
+  assert.match(py.contents, /login: pydev/)
+  assert.match(py.contents, /login: docsdev/)
+  assert.match(py.contents, /login: mystery/)
+  assert.doesNotMatch(py.contents, /login: tsdev/)
+
+  const ts = await buildReleaseFile('strands-agents/harness-sdk',
+    { tag_name: 'typescript/v1.5.0', published_at: '2026-06-12T00:00:00Z', html_url: 'h', body }, deps)
+  assert.match(ts.contents, /login: tsdev/)
+  assert.match(ts.contents, /login: docsdev/)
+  assert.match(ts.contents, /login: mystery/)
+  assert.doesNotMatch(ts.contents, /login: pydev/)
+})
+
 test('new contributors flow into frontmatter, not entries', async () => {
   const body = [
     '* feat: real thing by @a in https://github.com/strands-agents/harness-sdk/pull/1',
