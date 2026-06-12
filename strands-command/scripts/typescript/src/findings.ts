@@ -12,6 +12,8 @@ export const FindingSchema = z.object({
   startLine: z.number().int().optional(),
   reason: z.string(),
   score: z.number().int().min(0).max(100),
+}).refine((f) => f.startLine === undefined || f.startLine <= f.line, {
+  message: 'startLine must be <= line',
 })
 
 export type Finding = z.infer<typeof FindingSchema>

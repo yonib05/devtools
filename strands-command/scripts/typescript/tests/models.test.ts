@@ -12,6 +12,9 @@ describe('makeModel', () => {
   it('accepts a raw Bedrock model id passthrough', () => {
     expect(() => makeModel('global.anthropic.claude-opus-4-8')).not.toThrow()
   })
+  it('rejects prototype-chain keys as tiers', () => {
+    expect(() => makeModel('constructor')).toThrow()
+  })
 })
 
 describe('resolveModelChoice (precedence: user config > agent choice > default)', () => {

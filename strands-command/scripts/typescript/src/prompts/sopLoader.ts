@@ -1,6 +1,6 @@
 // src/prompts/sopLoader.ts
 import { readFileSync } from 'node:fs'
-import { join, normalize } from 'node:path'
+import { join, normalize, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { agentOverrides } from '../models.js'
 
@@ -10,8 +10,9 @@ const SOP_DIR = fileURLToPath(new URL('../../sops/', import.meta.url))
 export function loadSop(agentKey: string, defaultRelPath: string): string {
   const override = agentOverrides()[agentKey]?.sop
   const rel = override ?? defaultRelPath
+  const base = normalize(SOP_DIR).replace(/\/+$/, '') + sep
   const full = normalize(join(SOP_DIR, rel))
-  if (!full.startsWith(normalize(SOP_DIR))) {
+  if (!full.startsWith(base)) {
     throw new Error(`SOP path escapes sops/ dir: ${rel}`)
   }
   return readFileSync(full, 'utf8')

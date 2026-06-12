@@ -20,6 +20,11 @@ describe('loadSop', () => {
     expect(() => loadSop('bug', 'lenses/bug.sop.md')).toThrow(/escapes/)
   })
 
+  it('rejects sibling-directory prefix bypass', () => {
+    process.env.STRANDS_TS_AGENTS = '{"bug":{"sop":"../sopsevil/x.sop.md"}}'
+    expect(() => loadSop('bug', 'lenses/bug.sop.md')).toThrow(/escapes/)
+  })
+
   it('rubric covers all bands', () => {
     for (const band of ['0', '25', '50', '75', '100']) expect(scorerRubric()).toContain(band)
   })

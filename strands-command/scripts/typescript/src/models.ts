@@ -56,7 +56,7 @@ export function resolveModelChoice(
 }
 
 export function makeModel(choice: ModelChoice): BedrockModel {
-  const isTier = choice in MODEL_IDS
+  const isTier = Object.prototype.hasOwnProperty.call(MODEL_IDS, choice)
   if (!isTier && !choice.includes('.')) {
     throw new Error(`Unknown model tier or id: ${choice}`)
   }

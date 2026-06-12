@@ -8,4 +8,7 @@ describe('resolveMode', () => {
   it('returns undefined for an unknown command', () => {
     expect(resolveMode('frobnicate')).toBeUndefined()
   })
+  it('returns undefined for an empty command', () => {
+    expect(resolveMode('')).toBeUndefined()
+  })
 })

@@ -23,6 +23,12 @@ describe('FindingSchema', () => {
     })).toThrow()
   })
 
+  it('rejects startLine greater than line', () => {
+    expect(() => FindingSchema.parse({
+      lens: 'bug', description: 'd', file: 'x', line: 5, startLine: 20, reason: 'r', score: 90,
+    })).toThrow()
+  })
+
   it('parses a review output wrapping a findings array', () => {
     const out = ReviewOutputSchema.parse({ findings: [] })
     expect(out.findings).toEqual([])
