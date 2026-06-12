@@ -9,6 +9,9 @@ const LINE = /^\s*[-*]\s+(.*)$/
 const TAIL = /^(.*?)(?:\s+by\s+@([\w-]+))?\s+in\s+https?:\/\/github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)\s*$/i
 const CONVENTIONAL = /^(feat|fix|docs|style|refactor|perf|test|chore|build|ci|revert)(?:\(([^)]+)\))?(!)?:\s*(.+)$/i
 const KNOWN_TYPES = new Set(['feat', 'fix', 'docs', 'perf', 'refactor', 'test', 'chore'])
+// GitHub's "## New Contributors" lines: "@login made their first contribution in <pr-url>".
+// These are celebrated separately (parseNewContributors) and must NOT become entries.
+const FIRST_CONTRIBUTION = /^@([\w-]+) made their first contribution\s+in\s+https?:\/\/github\.com\/[^/]+\/[^/]+\/pull\/(\d+)\s*$/i
 
 /**
  * @param {string|null|undefined} body
@@ -21,6 +24,7 @@ function parseReleaseBody(body) {
   for (const raw of body.replace(/\r\n?/g, '\n').split('\n')) {
     const li = raw.match(LINE)
     if (!li) continue
+    if (FIRST_CONTRIBUTION.test(li[1].trim())) continue // celebrated separately
     const tail = li[1].trim().match(TAIL)
     if (!tail) continue // not an itemized PR line (skips "omitted" notes, footers)
     const message = tail[1].trim()
@@ -56,9 +60,26 @@ function countChangelogBullets(body) {
   let n = 0
   for (const raw of body.replace(/\r\n?/g, '\n').split('\n')) {
     const li = raw.match(LINE)
-    if (li && LOOSE_ENTRY.test(li[1])) n++
+    if (li && LOOSE_ENTRY.test(li[1]) && !FIRST_CONTRIBUTION.test(li[1].trim())) n++
   }
   return n
 }
 
-module.exports = { parseReleaseBody, countChangelogBullets }
+/**
+ * Extract GitHub's "## New Contributors" section into structured data.
+ * @param {string|null|undefined} body
+ * @returns {Array<{login:string, pr:number}>}
+ */
+function parseNewContributors(body) {
+  if (!body) return []
+  const out = []
+  for (const raw of body.replace(/\r\n?/g, '\n').split('\n')) {
+    const li = raw.match(LINE)
+    if (!li) continue
+    const m = li[1].trim().match(FIRST_CONTRIBUTION)
+    if (m) out.push({ login: m[1], pr: Number(m[2]) })
+  }
+  return out
+}
+
+module.exports = { parseReleaseBody, countChangelogBullets, parseNewContributors }

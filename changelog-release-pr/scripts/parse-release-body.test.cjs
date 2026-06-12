@@ -1,6 +1,6 @@
 const { test } = require('node:test')
 const assert = require('node:assert/strict')
-const { parseReleaseBody, countChangelogBullets } = require('./parse-release-body.cjs')
+const { parseReleaseBody, countChangelogBullets, parseNewContributors } = require('./parse-release-body.cjs')
 
 const body = `## What's Changed
 
@@ -60,6 +60,34 @@ test('handles CRLF line endings (real GitHub bodies)', () => {
   assert.equal(lines[0].scope, 'model')
   assert.equal(lines[0].title, 'x') // no trailing \r
   assert.equal(countChangelogBullets(crlf), 2)
+})
+
+const nc = `## What's Changed
+* feat: real change by @dev in https://github.com/o/r/pull/1
+
+## New Contributors
+* @senthilkumarmohan made their first contribution in https://github.com/strands-agents/harness-sdk/pull/2623
+* @ianholtz made their first contribution in https://github.com/strands-agents/harness-sdk/pull/2651
+
+**Full Changelog**: https://github.com/o/r/compare/a...b`
+
+test('parseNewContributors extracts structured logins + prs', () => {
+  assert.deepEqual(parseNewContributors(nc), [
+    { login: 'senthilkumarmohan', pr: 2623 },
+    { login: 'ianholtz', pr: 2651 },
+  ])
+  assert.deepEqual(parseNewContributors(''), [])
+  assert.deepEqual(parseNewContributors(null), [])
+})
+
+test('first-contribution lines are excluded from entries', () => {
+  const lines = parseReleaseBody(nc)
+  assert.equal(lines.length, 1)
+  assert.equal(lines[0].title, 'real change')
+})
+
+test('countChangelogBullets ignores first-contribution lines (no false drift)', () => {
+  assert.equal(countChangelogBullets(nc), 1)
 })
 
 test('countChangelogBullets stays loose vs strict parser (drift signal)', () => {

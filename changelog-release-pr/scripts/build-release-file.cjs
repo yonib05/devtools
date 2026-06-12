@@ -2,7 +2,7 @@
 // injected deps (enrich + readExisting), so it's unit-testable without network.
 
 const { tagToMeta, getPackageUrl } = require('./tag-meta.cjs')
-const { parseReleaseBody, countChangelogBullets } = require('./parse-release-body.cjs')
+const { parseReleaseBody, countChangelogBullets, parseNewContributors } = require('./parse-release-body.cjs')
 const { renderMarkdown, mergePreserving } = require('./render-markdown.cjs')
 
 function fileNameFor(sdk, language, version) {
@@ -84,6 +84,7 @@ async function buildReleaseFile(repo, release, deps) {
     releaseUrl: release.html_url,
     packageUrl: getPackageUrl(meta.sdk, meta.language, meta.version),
     entries,
+    newContributors: parseNewContributors(release.body),
   }
 
   const contents = existing ? mergePreserving(file, existing) : renderMarkdown(file)

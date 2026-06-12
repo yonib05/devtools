@@ -103,6 +103,20 @@ test('pre-monorepo and evals releases are not language-filtered', async () => {
   assert.match(ev.contents, /eval thing/)
 })
 
+test('new contributors flow into frontmatter, not entries', async () => {
+  const body = [
+    '* feat: real thing by @a in https://github.com/strands-agents/harness-sdk/pull/1',
+    '',
+    '## New Contributors',
+    '* @newdev made their first contribution in https://github.com/strands-agents/harness-sdk/pull/2700',
+  ].join('\n')
+  const r = await buildReleaseFile('strands-agents/harness-sdk',
+    { tag_name: 'python/v1.43.0', published_at: '2026-06-12T00:00:00Z', html_url: 'h', body },
+    { enrich: async () => ({ areas: [], breaking: false, commit: null, author: null, languages: ['python'] }), readExisting: async () => null })
+  assert.match(r.contents, /newContributors:\n  - \{ login: newdev, pr: 2700 \}/)
+  assert.doesNotMatch(r.contents, /first contribution/) // not an entry
+})
+
 test('breaking marker promotes type when no conventional type', async () => {
   // a non-conventional line that the PR labels mark breaking → type becomes 'breaking'
   const r = await buildReleaseFile('strands-agents/harness-sdk',

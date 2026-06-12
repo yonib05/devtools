@@ -68,6 +68,12 @@ function renderMarkdown(f, body = '') {
   } else {
     lines.push('entries: []')
   }
+  if (f.newContributors && f.newContributors.length) {
+    lines.push('newContributors:')
+    for (const c of f.newContributors) {
+      lines.push(`  - { login: ${scalar(c.login)}, pr: ${c.pr} }`)
+    }
+  }
   lines.push('---')
   return lines.join('\n') + '\n' + (body ? '\n' + body.replace(/\s+$/, '') + '\n' : '')
 }

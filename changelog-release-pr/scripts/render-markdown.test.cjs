@@ -87,6 +87,12 @@ test('escapes quotes and newlines in titles', () => {
   assert.match(md, /title: "add \\"quoted\\" thing"/)
 })
 
+test('renders newContributors when present, omits when empty', () => {
+  const md = renderMarkdown({ ...file, newContributors: [{ login: 'newdev', pr: 2700 }, { login: 'other-dev', pr: 2701 }] })
+  assert.match(md, /newContributors:\n  - \{ login: newdev, pr: 2700 \}\n  - \{ login: other-dev, pr: 2701 \}/)
+  assert.doesNotMatch(renderMarkdown(file), /newContributors/)
+})
+
 test('mergePreserving keeps existing highlights + body, refreshes entries', () => {
   const existing = `---
 sdk: harness
