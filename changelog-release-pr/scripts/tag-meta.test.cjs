@@ -42,6 +42,16 @@ test('python-wasm is skipped (null)', () => {
   assert.equal(tagToMeta('strands-agents/harness-sdk', 'python-wasm/v0.0.1'), null)
 })
 
+test('archived sdk-typescript repo bare v tags map to harness/typescript', () => {
+  assert.deepEqual(tagToMeta('strands-agents/sdk-typescript', 'v1.3.0'), {
+    sdk: 'harness', language: 'typescript', version: '1.3.0',
+  })
+  // rc tags parse too
+  assert.deepEqual(tagToMeta('strands-agents/sdk-typescript', 'v1.0.0-rc.5'), {
+    sdk: 'harness', language: 'typescript', version: '1.0.0-rc.5',
+  })
+})
+
 test('package urls', () => {
   assert.equal(getPackageUrl('harness', 'python', '1.42.0'), 'https://pypi.org/project/strands-agents/1.42.0/')
   assert.equal(getPackageUrl('harness', 'typescript', '1.4.0'), 'https://www.npmjs.com/package/@strands-agents/sdk/v/1.4.0')

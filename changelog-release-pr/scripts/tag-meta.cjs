@@ -19,6 +19,12 @@ function tagToMeta(repo, tag) {
     if (!m) return null
     return { sdk: 'evals', language: undefined, version: cleanVersion('v' + m[1]) }
   }
+  // The archived pre-monorepo TypeScript repo: all its releases are
+  // harness/typescript history (used only by the one-time backfill).
+  if (repo.endsWith('/sdk-typescript')) {
+    if (!/^v\.?\d/.test(tag)) return null
+    return { sdk: 'harness', language: 'typescript', version: cleanVersion(tag) }
+  }
   // harness-sdk
   if (tag.startsWith('python-wasm/')) return null
   if (tag.startsWith('python/')) {
