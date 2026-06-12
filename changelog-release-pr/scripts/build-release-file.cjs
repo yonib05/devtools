@@ -41,12 +41,25 @@ async function buildReleaseFile(repo, release, deps) {
       ? `${release.tag_name}: parsed ${parsed.length} of ${bullets} changelog bullets — release-note format may have changed; review before merge.`
       : undefined
 
+  // Monorepo releases (prefixed tags) list every merged PR regardless of
+  // language, so gate entries by which SDK dirs the PR actually touched:
+  // python stream keeps python-touching PRs, ts stream keeps ts-touching,
+  // both → both, site/ci/docs-only (empty languages) → omitted everywhere,
+  // unknown (file info unavailable) → kept (degrade open). Pre-monorepo
+  // bare-`v` tags and evals are single-language releases — no filtering.
+  const isMonorepoStream =
+    meta.sdk === 'harness' &&
+    (release.tag_name.startsWith('python/') || release.tag_name.startsWith('typescript/'))
+
   const entries = []
   for (const p of parsed) {
     const prRepo = p.prRepo || repo
     const enr = p.pr
       ? await deps.enrich(prRepo, p.pr)
-      : { areas: [], breaking: false, commit: null, author: null }
+      : { areas: [], breaking: false, commit: null, author: null, languages: null }
+    if (isMonorepoStream && Array.isArray(enr.languages) && !enr.languages.includes(meta.language)) {
+      continue
+    }
     const breaking = p.breaking || enr.breaking
     entries.push({
       type: breaking && p.type === 'other' ? 'breaking' : p.type,

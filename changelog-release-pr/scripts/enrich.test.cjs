@@ -28,7 +28,7 @@ test('detects breaking label', async () => {
 test('missing pr degrades gracefully (fetcher returns null)', async () => {
   const f = async () => null
   const e = await enrichFromPr('r', 1, f)
-  assert.deepEqual(e, { areas: [], breaking: false, commit: null, author: null })
+  assert.deepEqual(e, { areas: [], breaking: false, commit: null, author: null, languages: null })
 })
 
 test('no merge sha yields null commit', async () => {
@@ -36,4 +36,28 @@ test('no merge sha yields null commit', async () => {
   const e = await enrichFromPr('r', 1, f)
   assert.equal(e.commit, null)
   assert.equal(e.author, null)
+})
+
+test('derives languages from monorepo top-level dirs', async () => {
+  const f = async () => ({ labels: [], merge_commit_sha: 'abc1234', user: 'x', files: ['strands-py/src/agent.py', 'strands-py/tests/t.py'] })
+  const e = await enrichFromPr('r', 1, f)
+  assert.deepEqual(e.languages, ['python'])
+})
+
+test('PR touching both sdk dirs yields both languages', async () => {
+  const f = async () => ({ labels: [], merge_commit_sha: 'abc1234', user: 'x', files: ['strands-py/a.py', 'strands-ts/b.ts'] })
+  const e = await enrichFromPr('r', 1, f)
+  assert.deepEqual(e.languages.sort(), ['python', 'typescript'])
+})
+
+test('site/ci/docs-only PR yields empty languages', async () => {
+  const f = async () => ({ labels: [], merge_commit_sha: 'abc1234', user: 'x', files: ['site/src/page.astro', '.github/workflows/x.yml', 'designs/d.md'] })
+  const e = await enrichFromPr('r', 1, f)
+  assert.deepEqual(e.languages, [])
+})
+
+test('missing files info yields null languages (unknown — keep everywhere)', async () => {
+  const f = async () => ({ labels: [], merge_commit_sha: 'abc1234', user: 'x' })
+  const e = await enrichFromPr('r', 1, f)
+  assert.equal(e.languages, null)
 })

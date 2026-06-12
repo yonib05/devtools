@@ -55,6 +55,54 @@ test('flags format-drift warning when bullets parse poorly', async () => {
   assert.match(r.warning, /parsed 0 of 3/)
 })
 
+test('monorepo release filters entries by stream language from PR files', async () => {
+  const body = [
+    '* feat: py thing by @a in https://github.com/strands-agents/harness-sdk/pull/1',
+    '* feat: ts thing by @b in https://github.com/strands-agents/harness-sdk/pull/2',
+    '* feat: both thing by @c in https://github.com/strands-agents/harness-sdk/pull/3',
+    '* chore: site thing by @d in https://github.com/strands-agents/harness-sdk/pull/4',
+    '* fix: unknown thing by @e in https://github.com/strands-agents/harness-sdk/pull/5',
+  ].join('\n')
+  const langByPr = { 1: ['python'], 2: ['typescript'], 3: ['python', 'typescript'], 4: [], 5: null }
+  const deps = {
+    enrich: async (_repo, pr) => ({ areas: [], breaking: false, commit: null, author: null, languages: langByPr[pr] }),
+    readExisting: async () => null,
+  }
+  const py = await buildReleaseFile('strands-agents/harness-sdk',
+    { tag_name: 'python/v1.43.0', published_at: '2026-06-12T00:00:00Z', html_url: 'h', body }, deps)
+  // python stream: keeps py(1), both(3), unknown(5); drops ts(2) and site-only(4)
+  assert.match(py.contents, /py thing/)
+  assert.match(py.contents, /both thing/)
+  assert.match(py.contents, /unknown thing/)
+  assert.doesNotMatch(py.contents, /ts thing/)
+  assert.doesNotMatch(py.contents, /site thing/)
+
+  const ts = await buildReleaseFile('strands-agents/harness-sdk',
+    { tag_name: 'typescript/v1.5.0', published_at: '2026-06-12T00:00:00Z', html_url: 'h', body }, deps)
+  // typescript stream: keeps ts(2), both(3), unknown(5)
+  assert.match(ts.contents, /ts thing/)
+  assert.match(ts.contents, /both thing/)
+  assert.match(ts.contents, /unknown thing/)
+  assert.doesNotMatch(ts.contents, /py thing/)
+  assert.doesNotMatch(ts.contents, /site thing/)
+})
+
+test('pre-monorepo and evals releases are not language-filtered', async () => {
+  const deps = {
+    // even if files say typescript, a single-language-repo release keeps everything
+    enrich: async () => ({ areas: [], breaking: false, commit: null, author: null, languages: ['typescript'] }),
+    readExisting: async () => null,
+  }
+  const old = await buildReleaseFile('strands-agents/harness-sdk',
+    { tag_name: 'v1.9.1', published_at: '2026-01-01T00:00:00Z', html_url: 'h',
+      body: '* feat: old thing by @a in https://github.com/strands-agents/sdk-python/pull/9' }, deps)
+  assert.match(old.contents, /old thing/)
+  const ev = await buildReleaseFile('strands-agents/evals',
+    { tag_name: 'v0.2.1', published_at: '2026-01-01T00:00:00Z', html_url: 'h',
+      body: '* feat: eval thing by @a in https://github.com/strands-agents/evals/pull/9' }, deps)
+  assert.match(ev.contents, /eval thing/)
+})
+
 test('breaking marker promotes type when no conventional type', async () => {
   // a non-conventional line that the PR labels mark breaking → type becomes 'breaking'
   const r = await buildReleaseFile('strands-agents/harness-sdk',

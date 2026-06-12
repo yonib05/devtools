@@ -39,11 +39,24 @@ async function runAction(github, context, core) {
       try {
         const res = await github.rest.pulls.get({ owner, repo, pull_number: num })
         const pr = res.data
-        return {
+        const out = {
           labels: (pr.labels || []).map((l) => l.name),
           merge_commit_sha: pr.merge_commit_sha,
           user: pr.user ? pr.user.login : null,
         }
+        // Changed files drive language gating for monorepo releases. Only the
+        // monorepo needs them — pre-monorepo/evals repos are single-language
+        // and build skips filtering there, so don't spend the extra call.
+        if (repoFull === 'strands-agents/harness-sdk') {
+          try {
+            const files = await github.paginate(github.rest.pulls.listFiles, { owner, repo, pull_number: num, per_page: 100 })
+            out.files = files.map((f) => f.filename)
+          } catch (e) {
+            // Leave files undefined → languages null → entry kept everywhere.
+            core.warning(`PR ${repoFull}#${num} files: ${e.status || e.message} — language gating skipped`)
+          }
+        }
+        return out
       } catch (e) {
         // 404 (deleted PR) and transient errors (403 rate-limit, 5xx) should
         // degrade this one entry, not abort a whole backfill. Enrichment is
