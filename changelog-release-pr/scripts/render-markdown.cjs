@@ -57,7 +57,6 @@ function renderMarkdown(f, body = '') {
   lines.push(`date: ${f.date}`)
   lines.push(`releaseUrl: ${f.releaseUrl}`)
   lines.push(`packageUrl: ${f.packageUrl}`)
-  if (f.compareUrl) lines.push(`compareUrl: ${f.compareUrl}`)
   if (f.highlights && f.highlights.trim()) {
     lines.push('highlights: |')
     for (const l of f.highlights.replace(/\s+$/, '').split('\n')) lines.push(`  ${l}`)
