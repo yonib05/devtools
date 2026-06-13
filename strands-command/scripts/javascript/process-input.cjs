@@ -10,6 +10,9 @@ async function getIssueInfo(github, context, inputs) {
   // pull_request_target event). Fall back to the comment payload only for
   // issue_comment events, which do not pass inputs.
   const hasExplicitInput = Boolean(inputs.issue_id);
+  if (!hasExplicitInput && !context.payload.issue) {
+    throw new Error(`No issue_id input provided and no issue in the ${context.eventName} event payload. Pass issue_id explicitly for non-comment events.`);
+  }
   const issueId = hasExplicitInput
     ? inputs.issue_id
     : context.payload.issue.number.toString();
