@@ -9,6 +9,17 @@ function permalink(repo: string, sha: string, file: string, line: number, startL
   return `https://github.com/${repo}/blob/${sha}/${file}#L${lo}-L${hi}`
 }
 
+// Clamp an inline-comment anchor: a finding's `line` is the changed line; only
+// keep a multi-line range when it's a small, forward span (start < line, within
+// 10 lines), otherwise anchor to the single line so GitHub doesn't 422 on a
+// range that reaches over unchanged context.
+export function inlineAnchor(line: number, startLine?: number): { line: number; startLine?: number } {
+  if (startLine === undefined || startLine >= line || line - startLine > 10) {
+    return { line }
+  }
+  return { line, startLine }
+}
+
 export function inlineBody(f: Finding): string {
   return `**${f.lens}**: ${f.description}\n\n${f.reason} (confidence: ${f.score})`
 }

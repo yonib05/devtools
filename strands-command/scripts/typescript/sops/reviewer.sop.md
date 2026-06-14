@@ -41,6 +41,8 @@ Collect the reviewers' findings and score each one.
 - You MUST assign each finding an integer score 0-100 using this rubric:
   {{RUBRIC}}
 - You MUST confirm, for tenet/DECISIONS-flagged issues, that the cited doc actually says it before scoring > 25
+- You MUST keep a test that was changed to match buggy or regressed behavior as its OWN separate finding (lens: test), distinct from the code finding it masks, because a test edited to expect the wrong result removes the safety net and is independently dangerous
+- You MUST NOT merge findings that have different root causes or live in different files just because they describe the same incident; dedupe only true duplicates (same file, same line, same issue)
 
 ### 4. Emit Final Answer
 

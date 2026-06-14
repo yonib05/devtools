@@ -1,6 +1,6 @@
 import { buildOrchestrator } from '../agents/orchestrator.js'
 import { scoreAndFilter } from '../scoreAndFilter.js'
-import { formatReview, inlineBody } from '../format.js'
+import { formatReview, inlineBody, inlineAnchor } from '../format.js'
 import { addPrComment } from '../tools/github.js'
 import { writeEnabled } from '../tools/deferredWrite.js'
 import { ReviewOutputSchema } from '../findings.js'
@@ -31,13 +31,14 @@ export async function runReviewer(ctx: ModeContext): Promise<void> {
   // finding, so a failed inline degrades gracefully rather than losing the
   // finding. (writeExecutor already continues past per-op failures and reports
   // counts.)
-  for (const finding of kept) {
+  for (const f of kept) {
+    const anchor = inlineAnchor(f.line, f.startLine)
     await addPrComment(mode, {
       prNumber: ctx.prNumber,
-      body: inlineBody(finding),
-      path: finding.file,
-      line: finding.line,
-      startLine: finding.startLine,
+      body: inlineBody(f),
+      path: f.file,
+      line: anchor.line,
+      startLine: anchor.startLine,
       commitId: ctx.headSha,
       repo: ctx.repo,
     })

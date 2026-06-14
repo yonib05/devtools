@@ -1,6 +1,22 @@
 import { describe, it, expect } from 'vitest'
 import { formatReview, inlineBody, NO_ISSUES_TEMPLATE } from '../src/format'
+import { inlineAnchor } from '../src/format'
 import type { Finding } from '../src/findings'
+
+describe('inlineAnchor', () => {
+  it('keeps a small forward range', () => {
+    expect(inlineAnchor(10, 8)).toEqual({ line: 10, startLine: 8 })
+  })
+  it('drops startLine when undefined', () => {
+    expect(inlineAnchor(10)).toEqual({ line: 10 })
+  })
+  it('drops a backwards range (start >= line)', () => {
+    expect(inlineAnchor(10, 20)).toEqual({ line: 10 })
+  })
+  it('drops a wide back-reach over unchanged context', () => {
+    expect(inlineAnchor(62, 47)).toEqual({ line: 62 })
+  })
+})
 
 describe('formatReview', () => {
   it('renders the no-issues template when empty (designed silence)', () => {
