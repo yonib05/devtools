@@ -3,6 +3,13 @@ import { tool } from '@strands-agents/sdk'
 import { z } from 'zod'
 import { recordOrCall, type WriteMode } from './deferredWrite.js'
 
+export class GitHubApiError extends Error {
+  constructor(public readonly status: number, method: string, endpoint: string) {
+    super(`GitHub ${method} ${endpoint} failed: ${status}`)
+    this.name = 'GitHubApiError'
+  }
+}
+
 function repoOrEnv(repo?: string): string {
   const r = repo ?? process.env.GITHUB_REPOSITORY
   if (!r) throw new Error('GITHUB_REPOSITORY not set')
@@ -26,7 +33,7 @@ async function githubRequest(
     },
     body: body ? JSON.stringify(body) : undefined,
   })
-  if (!res.ok) throw new Error(`GitHub ${method} ${endpoint} failed: ${res.status}`)
+  if (!res.ok) throw new GitHubApiError(res.status, method, endpoint)
   return res.json()
 }
 

@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { writeFileSync, rmSync, existsSync, mkdirSync } from 'node:fs'
 import { replayOperations } from '../src/writeExecutor'
+import { GitHubApiError } from '../src/tools/github'
 
 const TMP = '.artifact/test_ops.jsonl'
 
@@ -58,5 +59,28 @@ describe('replayOperations', () => {
   it('returns zero counts when the file is missing', async () => {
     const { total } = await replayOperations('.artifact/does_not_exist.jsonl', {})
     expect(total).toBe(0)
+  })
+
+  it('counts a 422 GitHubApiError as skipped, not failed, without throwing', async () => {
+    const fake = vi.fn().mockRejectedValue(new GitHubApiError(422, 'POST', 'pulls/3/comments'))
+    writeFileSync(TMP, JSON.stringify(
+      { timestamp: 't', function: 'addPrComment', kwargs: { prNumber: 3, body: 'a', repo: 'o/r' } },
+    ) + '\n')
+    const { ok, failed, skipped } = await replayOperations(TMP, { addPrComment: fake })
+    expect(ok).toBe(0)
+    expect(failed).toBe(0)
+    expect(skipped).toBe(1)
+    expect(fake).toHaveBeenCalledOnce()
+  })
+
+  it('counts a non-422 GitHubApiError as failed', async () => {
+    const fake = vi.fn().mockRejectedValue(new GitHubApiError(500, 'POST', 'pulls/3/comments'))
+    writeFileSync(TMP, JSON.stringify(
+      { timestamp: 't', function: 'addPrComment', kwargs: { prNumber: 3, body: 'a', repo: 'o/r' } },
+    ) + '\n')
+    const { ok, failed, skipped } = await replayOperations(TMP, { addPrComment: fake })
+    expect(ok).toBe(0)
+    expect(failed).toBe(1)
+    expect(skipped).toBe(0)
   })
 })
