@@ -22,5 +22,3 @@ export type Finding = z.infer<typeof FindingSchema>
 export const ReviewOutputSchema = z.object({
   findings: z.array(FindingSchema),
 })
-
-export type ReviewOutput = z.infer<typeof ReviewOutputSchema>

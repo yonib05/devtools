@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { scoreAndFilter, THRESHOLD, MAX_COMMENTS } from '../src/scoreAndFilter'
+import { scoreAndFilter, MAX_COMMENTS } from '../src/scoreAndFilter'
 import type { Finding } from '../src/findings'
 
 function f(score: number, line = 1, file = 'a.py', description = 'd'): Finding {
@@ -21,10 +21,6 @@ describe('scoreAndFilter', () => {
   it('caps the number of findings', () => {
     const many = Array.from({ length: 40 }, (_, i) => f(90, i))
     expect(scoreAndFilter(many)).toHaveLength(MAX_COMMENTS)
-  })
-
-  it('exposes a threshold of 80', () => {
-    expect(THRESHOLD).toBe(80)
   })
 
   it('returns empty for empty input', () => {

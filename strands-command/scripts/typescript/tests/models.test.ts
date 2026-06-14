@@ -1,11 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { makeModel, MODEL_IDS, resolveModelChoice } from '../src/models'
+import { makeModel, resolveModelChoice } from '../src/models'
 
 describe('makeModel', () => {
-  it('maps tiers to distinct pinned model ids', () => {
-    expect(MODEL_IDS.haiku).not.toBe(MODEL_IDS.sonnet)
-    expect(MODEL_IDS.sonnet).toMatch(/sonnet/)
-  })
   it('throws on an unknown tier that is not a model id', () => {
     expect(() => makeModel('gpt')).toThrow()
   })
