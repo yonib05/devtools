@@ -1,0 +1,56 @@
+name: Dependabot Analyze (e2e test)
+
+# TEMPORARY test harness for PR #61 (dependabot-analyze mode).
+# Manually dispatch against a dependency-bump PR. Uses the patched
+# test/dependabot-e2e branch's actions so the PR's runner + SOP run.
+# Delete once verification is done.
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number to analyze (a dependency bump)'
+        required: true
+        type: string
+      changelog:
+        description: 'Sanitized changelog text (untrusted) to feed the agent'
+        required: false
+        type: string
+        default: |
+          ## boto3 1.40.0
+          - Added support for new service endpoints.
+          - No breaking changes to existing client APIs.
+          - Deprecated nothing in this release.
+
+jobs:
+  setup-and-process:
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Parse input
+        id: parse
+        uses: yonib05/devtools/strands-command/actions/strands-input-parser@test/dependabot-e2e
+        with:
+          issue_id: ${{ inputs.pr_number }}
+          command: 'dependabot-analyze'
+
+  execute-agent:
+    needs: [setup-and-process]
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+      id-token: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Run Strands Agent
+        uses: yonib05/devtools/strands-command/actions/strands-agent-runner@test/dependabot-e2e
+        with:
+          aws_role_arn: ${{ secrets.AWS_ROLE_ARN }}
+          sessions_bucket: ${{ secrets.AGENT_SESSIONS_BUCKET }}
+          write_permission: 'true'
+          sanitized_changelog: ${{ inputs.changelog }}
