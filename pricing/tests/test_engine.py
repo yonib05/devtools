@@ -15,6 +15,6 @@ def test_no_discount_below_first_tier():
 def test_tiered_discount_and_free_shipping():
     e = _engine()
     # subtotal 300 -> 10% tier, free shipping (>=250)
+    # tax is computed on merchandise value (300), discount applied after
     total = e.total([LineItem("a", 100.0, 3)])
-    discounted = 300.0 * 0.90
-    assert total == discounted + discounted * 0.10
+    assert total == 300.0 * 0.90 + 300.0 * 0.10
