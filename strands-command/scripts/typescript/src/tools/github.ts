@@ -46,6 +46,16 @@ export const _http = { request: githubRequest }
 const PAGE_SIZE = 100
 const MAX_PAGES = 10
 
+// Reject path-traversal segments from an agent-supplied path before it reaches
+// an API URL. Returns the split segments for the caller to encode/join.
+function safeSegments(path: string): string[] {
+  const segments = path.split('/')
+  if (segments.some((s) => s === '..' || s === '.' || s === '')) {
+    throw new Error(`Invalid file path: ${path}`)
+  }
+  return segments
+}
+
 async function paginate(endpointBase: string, repo?: string): Promise<unknown[]> {
   const all: unknown[] = []
   for (let page = 1; page <= MAX_PAGES; page++) {
@@ -68,11 +78,7 @@ export async function getPrDiffRaw(prNumber: number, repo?: string): Promise<str
 }
 
 export async function getFileContentsRaw(path: string, ref: string, repo?: string): Promise<string> {
-  const segments = path.split('/')
-  if (segments.some((s) => s === '..' || s === '.' || s === '')) {
-    throw new Error(`Invalid file path: ${path}`)
-  }
-  const safePath = segments.map(encodeURIComponent).join('/')
+  const safePath = safeSegments(path).map(encodeURIComponent).join('/')
   const data = await _http.request('GET', `contents/${safePath}?ref=${encodeURIComponent(ref)}`, repo, undefined)
   // The contents API returns base64; decode so the reviewing agent sees real text.
   if (data && typeof data === 'object' && 'content' in data && typeof (data as any).content === 'string') {
@@ -85,10 +91,7 @@ export async function getFileContentsRaw(path: string, ref: string, repo?: strin
 export async function getFileHistoryRaw(path: string, repo?: string): Promise<string> {
   // Recent commits touching this file — the history lens's data source
   // (no shell/git in the TS runner; history comes from the API).
-  const segments = path.split('/')
-  if (segments.some((s) => s === '..' || s === '.' || s === '')) {
-    throw new Error(`Invalid file path: ${path}`)
-  }
+  safeSegments(path)
   const data = await _http.request('GET', `commits?path=${encodeURIComponent(path)}&per_page=20`, repo, undefined)
   return JSON.stringify(data)
 }

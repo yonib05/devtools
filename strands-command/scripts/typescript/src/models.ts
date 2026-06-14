@@ -11,8 +11,9 @@ export const MODEL_IDS = {
 
 export type ModelTier = keyof typeof MODEL_IDS
 
-const DEFAULT_MAX_TOKENS: Record<ModelTier, number> = { haiku: 8000, sonnet: 16000, opus: 16000, fable: 16000 }
-const FALLBACK_MAX_TOKENS = 16000
+// haiku gets a smaller budget; every other tier (and raw model ids) use the default.
+const MAX_TOKENS = 16000
+const HAIKU_MAX_TOKENS = 8000
 
 // A model choice is either a tier alias ("haiku" | "sonnet" | "opus" | "fable")
 // or a raw Bedrock model id (anything containing a dot).
@@ -66,7 +67,7 @@ export function makeModel(choice: ModelChoice): BedrockModel {
     throw new Error(`Unknown model tier or id: ${choice}`)
   }
   const modelId = isTier ? MODEL_IDS[choice as ModelTier] : choice
-  const maxTokens = isTier ? DEFAULT_MAX_TOKENS[choice as ModelTier] : FALLBACK_MAX_TOKENS
+  const maxTokens = choice === 'haiku' ? HAIKU_MAX_TOKENS : MAX_TOKENS
   return new BedrockModel({
     modelId,
     maxTokens,
