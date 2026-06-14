@@ -53,6 +53,9 @@ STRANDS_REGION = "us-west-2"
 # Default values for environment variables used only in this file
 DEFAULT_SYSTEM_PROMPT = "You are an autonomous GitHub agent powered by Strands Agents SDK."
 
+# Read-only analysis mode that runs with a restricted tool set.
+ANALYZE_MODE = "dependabot-analyze"
+
 
 def _send_eval_trigger(session_id: str, eval_type: str) -> None:
     """Send evaluation trigger to SQS queue after agent completion.
@@ -182,7 +185,7 @@ def _get_all_tools() -> list[Any]:
 
 
 def _get_analysis_tools() -> list[Any]:
-    """Reduced tool set for read-only analysis modes.
+    """Reduced tool set for the read-only analysis mode.
 
     Excludes file editing and issue/PR mutation tools so the SOP's read-only
     constraint is enforced at the tool level, not just by prompt instructions.
@@ -193,12 +196,8 @@ def _get_analysis_tools() -> list[Any]:
         shell,
         http_request,
 
-        # GitHub read tools
-        get_issue,
-        get_issue_comments,
-        list_issues,
+        # GitHub PR read tools
         get_pull_request,
-        list_pull_requests,
         get_pr_files,
         get_pr_review_and_comments,
 
@@ -211,7 +210,7 @@ def _get_analysis_tools() -> list[Any]:
 
 
 def _get_tools_for_mode(mode: str) -> list[Any]:
-    if mode == "dependabot-analyze":
+    if mode == ANALYZE_MODE:
         return _get_analysis_tools()
     return _get_all_tools()
 
@@ -305,7 +304,7 @@ def main() -> None:
         print(f"🤖 Running agent with task: {task}")
 
         changelog = os.environ.get("SANITIZED_CHANGELOG", "").strip()
-        if changelog and os.environ.get("AGENT_MODE", "") == "dependabot-analyze":
+        if changelog and os.environ.get("AGENT_MODE", "") == ANALYZE_MODE:
             # Wrap at the trust boundary so the SOP's untrusted-data framing
             # holds regardless of caller behavior. Strip embedded closing tags
             # so the changelog cannot escape its wrapper. Not printed to logs.
