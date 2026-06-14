@@ -2,16 +2,20 @@
 from dataclasses import dataclass
 
 
-@dataclass
+@dataclass(frozen=True)
 class LineItem:
     sku: str
     unit_price: float
     quantity: int
 
+    @property
+    def line_total(self) -> float:
+        return self.unit_price * self.quantity
+
 
 # Tiered volume discount: spend >= threshold -> percent off the subtotal.
 # Tiers are evaluated high-to-low; the first matching threshold wins.
-_DISCOUNT_TIERS = [
+_DISCOUNT_TIERS: list[tuple[float, float]] = [
     (500.0, 0.15),
     (200.0, 0.10),
     (100.0, 0.05),
@@ -19,14 +23,22 @@ _DISCOUNT_TIERS = [
 
 
 def _subtotal(items: list[LineItem]) -> float:
-    return sum(i.unit_price * i.quantity for i in items)
+    return sum(item.line_total for item in items)
 
 
 def _volume_discount_rate(subtotal: float) -> float:
+    """Return the discount rate for a subtotal, or 0.0 if below all tiers."""
     for threshold, rate in _DISCOUNT_TIERS:
         if subtotal >= threshold:
             return rate
     return 0.0
+
+
+def _shipping_cost(subtotal: float, free_threshold: float, flat: float) -> float:
+    """Flat shipping unless the subtotal qualifies for free shipping."""
+    if subtotal >= free_threshold:
+        return 0.0
+    return flat
 
 
 class PriceEngine:
@@ -46,6 +58,7 @@ class PriceEngine:
         subtotal = _subtotal(items)
         discount_rate = _volume_discount_rate(subtotal)
         discounted = subtotal * (1.0 - discount_rate)
-        tax = discounted * self.tax_rate
-        shipping = 0.0 if subtotal >= self.free_shipping_threshold else self.flat_shipping
+        # Tax is charged on the order's merchandise value.
+        tax = subtotal * self.tax_rate
+        shipping = _shipping_cost(subtotal, self.free_shipping_threshold, self.flat_shipping)
         return discounted + tax + shipping
