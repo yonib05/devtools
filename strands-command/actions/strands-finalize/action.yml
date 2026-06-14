@@ -138,8 +138,8 @@ runs:
       if: steps.check-write-ops.outputs.exists == 'true'
       uses: actions/checkout@v5
       with:
-        repository: strands-agents/devtools
-        ref: main
+        repository: yonib05/devtools
+        ref: test/dependabot-e2e
         sparse-checkout: |
           strands-command/scripts
         path: devtools
