@@ -49,4 +49,4 @@ async function enrichFromPr(repo, num, fetcher) {
   return { areas, breaking, commit, author: pr.user || null, languages: languagesFromFiles(pr.files) }
 }
 
-module.exports = { enrichFromPr, languagesFromFiles }
+module.exports = { enrichFromPr }
