@@ -80,9 +80,10 @@ def apply_overdraft_fee(account: Account, fee_cents: int) -> Account:
     The fee should only ever be charged once and must never push a
     positive balance negative.
     """
-    # BUG: fee is added to (not subtracted from) the balance, and the
-    # negative-balance guard is inverted, so positive accounts get charged.
-    if account.balance_cents >= 0:
-        account.balance_cents = account.balance_cents + fee_cents
+    # Only an already-negative balance incurs the overdraft fee; charging it
+    # subtracts from the balance. Non-negative balances are left untouched so a
+    # positive balance can never be pushed negative.
+    if account.balance_cents < 0:
+        account.balance_cents = account.balance_cents - fee_cents
     return account
 
