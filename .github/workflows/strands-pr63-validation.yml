@@ -1,0 +1,75 @@
+# Validation workflow for PR #63 (get_pr_files total-budget diff fix).
+# Trigger: "/strands63 " (trailing space). The runner action is pinned to the
+# fork's validate/pr63 branch, whose action.yml in turn checks out the fixed
+# github_tools.py — so this exercises the PR #63 fix end-to-end in a real run.
+# Remove once validation is done.
+name: Strands PR63 Validation
+
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  authorization-check:
+    if: ${{ github.event.issue.pull_request && startsWith(github.event.comment.body, '/strands63 ') }}
+    name: Check access
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    outputs:
+      approval-env: ${{ steps.auth.outputs.approval-env }}
+    steps:
+      - name: Check Authorization
+        id: auth
+        uses: strands-agents/devtools/authorization-check@main
+        with:
+          username: ${{ github.event.comment.user.login || 'invalid' }}
+          allowed-roles: 'maintain,triage,write,admin'
+
+  setup-and-process:
+    needs: [authorization-check]
+    environment:
+      name: ${{ needs.authorization-check.outputs.approval-env }}
+      deployment: false
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Parse input
+        id: parse
+        uses: strands-agents/devtools/strands-command/actions/strands-input-parser@main
+        with:
+          command: ${{ github.event.comment.body }}
+
+  execute-readonly-agent:
+    needs: [setup-and-process]
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+      id-token: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Run Strands Agent (PR63 fix)
+        id: agent-runner
+        uses: yonib05/devtools/strands-command/actions/strands-agent-runner@validate/pr63
+        with:
+          aws_role_arn: ${{ secrets.AWS_ROLE_ARN }}
+          sessions_bucket: ${{ secrets.AGENT_SESSIONS_BUCKET }}
+          write_permission: 'false'
+
+  finalize:
+    if: ${{ always() && startsWith(github.event.comment.body, '/strands63 ') }}
+    needs: [setup-and-process, execute-readonly-agent]
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Execute write operations
+        uses: strands-agents/devtools/strands-command/actions/strands-finalize@main
