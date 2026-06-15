@@ -195,9 +195,13 @@ def run_agent(query: str):
         additional_request_fields = {}
         additional_request_fields["anthropic_beta"] = ["interleaved-thinking-2025-05-14"]
         
+        # Opus 4.8 requires adaptive thinking + output_config.effort rather than
+        # the older enabled/budget_tokens form (validation-only shim for PR63 test).
         additional_request_fields["thinking"] = {
-            "type": "enabled",
-            "budget_tokens": STRANDS_BUDGET_TOKENS
+            "type": "adaptive",
+        }
+        additional_request_fields["output_config"] = {
+            "effort": "high",
         }
         
         model = BedrockModel(
