@@ -55,11 +55,13 @@ runs:
         echo "EOF" >> $GITHUB_OUTPUT
 
     # Checkout devtools repo for scripts
+    # VALIDATION OVERRIDE: pinned to the fork's fix branch so the agent runs the
+    # PR #63 get_pr_files fix instead of upstream main. Revert before merge.
     - name: Checkout devtools
       uses: actions/checkout@v5
       with:
-        repository: strands-agents/devtools
-        ref: main
+        repository: yonib05/devtools
+        ref: validate/pr63
         sparse-checkout: |
           strands-command/scripts
           strands-command/agent-sops
