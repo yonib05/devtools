@@ -41,12 +41,26 @@ async function buildReleaseFile(repo, release, deps) {
       ? `${release.tag_name}: parsed ${parsed.length} of ${bullets} changelog bullets — release-note format may have changed; review before merge.`
       : undefined
 
-  // Monorepo releases (prefixed tags) list every merged PR regardless of
-  // language, so gate entries by which SDK dirs the PR actually touched:
-  // python stream keeps python-touching PRs, ts stream keeps ts-touching,
-  // both → both, site/ci/docs-only (empty languages) → omitted everywhere,
-  // unknown (file info unavailable) → kept (degrade open). Pre-monorepo
-  // bare-`v` tags and evals are single-language releases — no filtering.
+  // Two gates apply to every entry:
+  //
+  // 1. Docs-only (ALL streams): a PR confined to docs/blog/website dirs never
+  //    lines up with an SDK+language, so it's dropped everywhere — including
+  //    pre-monorepo bare-`v` and evals, which are otherwise unfiltered. This
+  //    keeps the changelog focused on SDK+language work (a blog-only PR or a
+  //    pure docs change won't appear in any stream).
+  // 2. Language (monorepo prefixed tags only): those releases list every merged
+  //    PR regardless of language, so gate by which SDK dirs the PR touched —
+  //    python stream keeps python-touching PRs, ts keeps ts-touching, both →
+  //    both. Unknown file info → kept (degrade open). Pre-monorepo bare-`v` and
+  //    evals are single-language, so no language gate there.
+  //
+  //    CRUCIAL: the dir-based language signal (strands-py/ vs strands-ts/) only
+  //    exists in the monorepo repo itself. Some early python releases were
+  //    re-tagged `python/v*` but their PRs live in the OLD flat `sdk-python`
+  //    repo (code under `src/`, no strands-py/ dir). Gating those by dir would
+  //    see empty languages and wrongly drop EVERY entry, emptying the release.
+  //    So only language-gate a PR when it actually lives in this release's repo
+  //    (prRepo === repo); cross-repo PRs are single-language by provenance.
   const isMonorepoStream =
     meta.sdk === 'harness' &&
     (release.tag_name.startsWith('python/') || release.tag_name.startsWith('typescript/'))
@@ -56,8 +70,9 @@ async function buildReleaseFile(repo, release, deps) {
     const prRepo = p.prRepo || repo
     const enr = p.pr
       ? await deps.enrich(prRepo, p.pr)
-      : { areas: [], breaking: false, commit: null, author: null, languages: null }
-    if (isMonorepoStream && Array.isArray(enr.languages) && !enr.languages.includes(meta.language)) {
+      : { areas: [], breaking: false, commit: null, author: null, languages: null, docsOnly: false }
+    if (enr.docsOnly) continue
+    if (isMonorepoStream && prRepo === repo && Array.isArray(enr.languages) && !enr.languages.includes(meta.language)) {
       continue
     }
     const breaking = p.breaking || enr.breaking
@@ -75,23 +90,31 @@ async function buildReleaseFile(repo, release, deps) {
     })
   }
 
-  // New contributors: language-gate like entries, with one deliberate
-  // difference — a first PR that touches NO sdk dir (docs/ci/site) is still
-  // celebrated in BOTH streams (entries with no language are dropped as noise;
-  // people aren't noise). Unknown file info → also kept in both.
-  let newContributors = parseNewContributors(release.body)
-  if (isMonorepoStream) {
-    const gated = []
-    for (const c of newContributors) {
-      // Use the PR's own repo (mirrors the entries path) — first-contribution
-      // links can point at the pre-monorepo repos.
-      const enr = await deps.enrich(c.prRepo || repo, c.pr)
+  // New contributors gate. A docs-only first PR (blog/site/docs) is dropped on
+  // every stream — same focus rule as entries; a blog-only contributor doesn't
+  // belong in an SDK+language changelog. Beyond that, on monorepo streams we
+  // language-gate, with one deliberate softness: a first PR that touches NO sdk
+  // dir but isn't docs-only (e.g. ci) is still celebrated in BOTH streams, and
+  // unknown file info is kept (people aren't noise). Pre-monorepo/evals streams
+  // keep everyone who isn't docs-only.
+  const rawContributors = parseNewContributors(release.body)
+  const newContributors = []
+  for (const c of rawContributors) {
+    // Use the PR's own repo (mirrors the entries path) — first-contribution
+    // links can point at the pre-monorepo repos.
+    const prRepo = c.prRepo || repo
+    const enr = await deps.enrich(prRepo, c.pr)
+    if (enr.docsOnly) continue
+    // Only language-gate PRs from the monorepo repo itself (see the entries
+    // gate above — cross-repo PRs have no strands-py/strands-ts dir signal).
+    if (isMonorepoStream && prRepo === repo) {
       const langs = enr.languages
       if (!Array.isArray(langs) || langs.length === 0 || langs.includes(meta.language)) {
-        gated.push(c)
+        newContributors.push(c)
       }
+    } else {
+      newContributors.push(c)
     }
-    newContributors = gated
   }
 
   const file = {

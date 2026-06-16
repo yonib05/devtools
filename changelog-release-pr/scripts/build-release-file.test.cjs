@@ -87,6 +87,27 @@ test('monorepo release filters entries by stream language from PR files', async 
   assert.doesNotMatch(ts.contents, /site thing/)
 })
 
+test('monorepo-tagged release with PRs in the OLD flat repo is not language-gated', async () => {
+  // Early python releases were re-tagged `python/v*` but their PRs live in the
+  // old `sdk-python` repo (code under `src/`, no strands-py/ dir). The file
+  // signal there is empty languages — gating on it would empty the release.
+  const body = [
+    '* feat: real py feature by @a in https://github.com/strands-agents/sdk-python/pull/423',
+    '* fix: another py fix by @b in https://github.com/strands-agents/sdk-python/pull/429',
+  ].join('\n')
+  const deps = {
+    // old-repo PRs touch src/ etc → languagesFromFiles yields [] (empty)
+    enrich: async () => ({ areas: [], breaking: false, commit: null, author: null, languages: [], docsOnly: false }),
+    readExisting: async () => null,
+  }
+  const r = await buildReleaseFile('strands-agents/harness-sdk',
+    { tag_name: 'python/v1.0.0', published_at: '2026-01-01T00:00:00Z', html_url: 'h', body }, deps)
+  // Both entries must survive — the cross-repo PRs are python by provenance,
+  // not gated by the (nonexistent) monorepo dir signal.
+  assert.match(r.contents, /real py feature/)
+  assert.match(r.contents, /another py fix/)
+})
+
 test('pre-monorepo and evals releases are not language-filtered', async () => {
   const deps = {
     // even if files say typescript, a single-language-repo release keeps everything
@@ -132,6 +153,49 @@ test('new contributors are language-gated, but docs/ci-only ones appear in both 
   assert.match(ts.contents, /login: docsdev/)
   assert.match(ts.contents, /login: mystery/)
   assert.doesNotMatch(ts.contents, /login: pydev/)
+})
+
+test('docs-only PRs are dropped on every stream (incl. pre-monorepo and evals)', async () => {
+  const body = [
+    '* feat: real code by @a in https://github.com/strands-agents/sdk-python/pull/1',
+    '* docs: blog post by @b in https://github.com/strands-agents/sdk-python/pull/2',
+  ].join('\n')
+  const deps = {
+    enrich: async (_r, pr) => pr === 2
+      ? { areas: [], breaking: false, commit: null, author: null, languages: [], docsOnly: true }
+      : { areas: [], breaking: false, commit: null, author: null, languages: null, docsOnly: false },
+    readExisting: async () => null,
+  }
+  // pre-monorepo bare-v (no language gate, but docs-only still drops)
+  const old = await buildReleaseFile('strands-agents/harness-sdk',
+    { tag_name: 'v1.9.1', published_at: '2026-01-01T00:00:00Z', html_url: 'h', body }, deps)
+  assert.match(old.contents, /real code/)
+  assert.doesNotMatch(old.contents, /blog post/)
+  // evals (no language gate either)
+  const ev = await buildReleaseFile('strands-agents/evals',
+    { tag_name: 'v0.2.1', published_at: '2026-01-01T00:00:00Z', html_url: 'h',
+      body: '* docs: site only by @b in https://github.com/strands-agents/evals/pull/2' },
+    { enrich: async () => ({ areas: [], breaking: false, commit: null, author: null, languages: [], docsOnly: true }), readExisting: async () => null })
+  assert.doesNotMatch(ev.contents, /site only/)
+})
+
+test('docs-only first-time contributors are dropped on every stream', async () => {
+  const body = [
+    '* feat: x by @a in https://github.com/strands-agents/sdk-python/pull/1',
+    '',
+    '## New Contributors',
+    '* @blogger made their first contribution in https://github.com/strands-agents/sdk-python/pull/2',
+  ].join('\n')
+  const deps = {
+    enrich: async (_r, pr) => pr === 2
+      ? { areas: [], breaking: false, commit: null, author: null, languages: [], docsOnly: true }
+      : { areas: [], breaking: false, commit: null, author: null, languages: null, docsOnly: false },
+    readExisting: async () => null,
+  }
+  // pre-monorepo stream: a blog-only first contribution does NOT appear
+  const old = await buildReleaseFile('strands-agents/harness-sdk',
+    { tag_name: 'v1.9.1', published_at: '2026-01-01T00:00:00Z', html_url: 'h', body }, deps)
+  assert.doesNotMatch(old.contents, /login: blogger/)
 })
 
 test('new contributors flow into frontmatter, not entries', async () => {

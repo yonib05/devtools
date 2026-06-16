@@ -28,7 +28,26 @@ test('detects breaking label', async () => {
 test('missing pr degrades gracefully (fetcher returns null)', async () => {
   const f = async () => null
   const e = await enrichFromPr('r', 1, f)
-  assert.deepEqual(e, { areas: [], breaking: false, commit: null, author: null, languages: null })
+  assert.deepEqual(e, { areas: [], breaking: false, commit: null, author: null, languages: null, docsOnly: false })
+})
+
+test('docsOnly true when every file is under site/ or docs/', async () => {
+  const f = async () => ({ labels: [], merge_commit_sha: 'abc1234', user: 'x', files: ['site/src/content/blog/post.md', 'docs/guide.md'] })
+  const e = await enrichFromPr('r', 1, f)
+  assert.equal(e.docsOnly, true)
+})
+
+test('docsOnly false when a PR also touches code', async () => {
+  const f = async () => ({ labels: [], merge_commit_sha: 'abc1234', user: 'x', files: ['site/blog/post.md', 'strands-py/src/agent.py'] })
+  const e = await enrichFromPr('r', 1, f)
+  assert.equal(e.docsOnly, false)
+})
+
+test('docsOnly false on unknown or empty file info (do not drop)', async () => {
+  const unknown = await enrichFromPr('r', 1, async () => ({ labels: [], merge_commit_sha: 'a', user: 'x' }))
+  assert.equal(unknown.docsOnly, false)
+  const empty = await enrichFromPr('r', 1, async () => ({ labels: [], merge_commit_sha: 'a', user: 'x', files: [] }))
+  assert.equal(empty.docsOnly, false)
 })
 
 test('no merge sha yields null commit', async () => {

@@ -49,17 +49,16 @@ async function runAction(github, context, core) {
           merge_commit_sha: pr.merge_commit_sha,
           user: pr.user ? pr.user.login : null,
         }
-        // Changed files drive language gating for monorepo releases. Only the
-        // monorepo needs them — pre-monorepo/evals repos are single-language
-        // and build skips filtering there, so don't spend the extra call.
-        if (repoFull === 'strands-agents/harness-sdk') {
-          try {
-            const files = await github.paginate(github.rest.pulls.listFiles, { owner, repo, pull_number: num, per_page: 100 })
-            out.files = files.map((f) => f.filename)
-          } catch (e) {
-            // Leave files undefined → languages null → entry kept everywhere.
-            core.warning(`PR ${repoFull}#${num} files: ${e.status || e.message} — language gating skipped`)
-          }
+        // Changed files drive two gates: language gating (monorepo) and the
+        // docs-only drop (all streams, incl. pre-monorepo/evals). So fetch
+        // files for every repo now — a docs/blog-only PR is filtered out
+        // everywhere, which needs file info on single-language repos too.
+        try {
+          const files = await github.paginate(github.rest.pulls.listFiles, { owner, repo, pull_number: num, per_page: 100 })
+          out.files = files.map((f) => f.filename)
+        } catch (e) {
+          // Leave files undefined → languages null, docsOnly false → entry kept.
+          core.warning(`PR ${repoFull}#${num} files: ${e.status || e.message} — gating skipped`)
         }
         return out
       } catch (e) {
