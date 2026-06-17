@@ -5,9 +5,17 @@
 // (scope, '!' marker, and "by @author" are all optional).
 
 const LINE = /^\s*[-*]\s+(.*)$/
-// "<msg> by @<author> in <pr-url>"  OR  "<msg> in <pr-url>"
+// "<msg> by @<author> in <ref>", where <ref> is either a full PR URL (older
+// auto-generated notes) or a short "#<n>" (newer curated notes). "by @author"
+// is optional. For the short form there's no repo in the ref, so prRepo is
+// null and the caller defaults it to the release's own repo.
 // Author logins may carry a bracket suffix for apps/bots, e.g. dependabot[bot].
-const TAIL = /^(.*?)(?:\s+by\s+@([\w-]+(?:\[[\w-]+\])?))?\s+in\s+https?:\/\/github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)\s*$/i
+const TAIL =
+  /^(.*?)(?:\s+by\s+@([\w-]+(?:\[[\w-]+\])?))?\s+in\s+(?:https?:\/\/github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)|#(\d+))\s*$/i
+// Cross-SDK marker in newer harness notes, e.g. "title _(shared with TS)_".
+// Language gating (from PR changed files) already decides stream membership,
+// so strip this annotation from the rendered title.
+const SHARED_ANNOTATION = /\s*_\(shared with [^)]+\)_\s*$/i
 const CONVENTIONAL = /^(feat|fix|docs|style|refactor|perf|test|chore|build|ci|revert)(?:\(([^)]+)\))?(!)?:\s*(.+)$/i
 const KNOWN_TYPES = new Set(['feat', 'fix', 'docs', 'perf', 'refactor', 'test', 'chore'])
 // GitHub's "## New Contributors" lines: "@login made their first contribution in <pr-url>".
@@ -29,10 +37,12 @@ function parseReleaseBody(body) {
     if (FIRST_CONTRIBUTION.test(li[1].trim())) continue // celebrated separately
     const tail = li[1].trim().match(TAIL)
     if (!tail) continue // not an itemized PR line (skips "omitted" notes, footers)
-    const message = tail[1].trim()
+    const message = tail[1].trim().replace(SHARED_ANNOTATION, '')
     const author = tail[2] || null
+    // Full-URL form fills groups 3 (repo) + 4 (pr); short "#n" form fills group 5
+    // with no repo, so prRepo stays null and the caller uses the release repo.
     const prRepo = tail[3] || null
-    const pr = tail[4] ? Number(tail[4]) : null
+    const pr = tail[4] ? Number(tail[4]) : tail[5] ? Number(tail[5]) : null
 
     const cc = message.match(CONVENTIONAL)
     if (cc) {

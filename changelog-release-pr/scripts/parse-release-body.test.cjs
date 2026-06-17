@@ -46,6 +46,28 @@ test('bot authors with bracket suffix parse cleanly (no title pollution)', () =>
   assert.equal(lines[0].pr, 625)
 })
 
+test('parses short "in #N" pr refs (newer curated note format)', () => {
+  // Newer harness notes use "by @author in #2740" (no full URL) plus emoji
+  // section headers. prRepo is null so the caller defaults it to the release repo.
+  const lines = parseReleaseBody(
+    [
+      '### ✨ Features',
+      '* feat(memory): port memory manager by @JackYPCOnline in #2740',
+      '* feat: pass invocation_state to edge condition calls by @yananym in #2642',
+    ].join('\n')
+  )
+  assert.equal(lines.length, 2)
+  assert.deepEqual(lines[0], { type: 'feat', scope: 'memory', breaking: false, title: 'port memory manager', author: 'JackYPCOnline', pr: 2740, prRepo: null })
+  assert.equal(lines[1].pr, 2642)
+})
+
+test('strips "_(shared with TS/Python)_" cross-SDK annotation from titles', () => {
+  const lines = parseReleaseBody('* feat: add memory injection _(shared with TS)_ by @opieter-aws in #2797')
+  assert.equal(lines.length, 1)
+  assert.equal(lines[0].title, 'add memory injection')
+  assert.equal(lines[0].pr, 2797)
+})
+
 test('non-conventional line falls back to type other', () => {
   const lines = parseReleaseBody('* just did a thing by @x in https://github.com/o/r/pull/9')
   assert.equal(lines[0].type, 'other')
