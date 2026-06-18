@@ -59,16 +59,21 @@ async function buildReleaseFile(repo, release, deps) {
     meta.sdk === 'harness' &&
     (release.tag_name.startsWith('python/') || release.tag_name.startsWith('typescript/'))
 
+  // Shared keep/drop decision for both entries and new contributors: drop a
+  // docs-only PR from every stream, and on a monorepo stream drop a PR with a
+  // POSITIVE dir signal for the OTHER language (empty/unknown languages are
+  // kept — see the language-gate note above).
+  const dropFromStream = (enr) =>
+    enr.docsOnly ||
+    (isMonorepoStream && Array.isArray(enr.languages) && enr.languages.length > 0 && !enr.languages.includes(meta.language))
+
   const entries = []
   for (const p of parsed) {
     const prRepo = p.prRepo || repo
     const enr = p.pr
       ? await deps.enrich(prRepo, p.pr)
       : { areas: [], breaking: false, commit: null, author: null, languages: null, docsOnly: false }
-    if (enr.docsOnly) continue
-    if (isMonorepoStream && Array.isArray(enr.languages) && enr.languages.length > 0 && !enr.languages.includes(meta.language)) {
-      continue
-    }
+    if (dropFromStream(enr)) continue
     const breaking = p.breaking || enr.breaking
     entries.push({
       type: breaking && p.type === 'other' ? 'breaking' : p.type,
@@ -84,28 +89,18 @@ async function buildReleaseFile(repo, release, deps) {
     })
   }
 
-  // New contributors gate. A docs-only first PR (blog/site/docs) is dropped on
-  // every stream — same focus rule as entries; a blog-only contributor doesn't
-  // belong in an SDK+language changelog. Beyond that, on monorepo streams we
-  // language-gate, with one deliberate softness: a first PR that touches NO sdk
-  // dir but isn't docs-only (e.g. ci) is still celebrated in BOTH streams, and
-  // unknown file info is kept (people aren't noise). Pre-monorepo/evals streams
-  // keep everyone who isn't docs-only.
+  // New contributors use the same keep/drop rule as entries (dropFromStream):
+  // a docs-only first PR doesn't belong in an SDK+language changelog, and a
+  // monorepo PR with a positive other-language signal is gated out — but a
+  // first PR touching no sdk dir (e.g. ci) or with unknown files is kept in
+  // both streams: people aren't noise.
   const rawContributors = parseNewContributors(release.body)
   const newContributors = []
   for (const c of rawContributors) {
     // Use the PR's own repo (mirrors the entries path) — first-contribution
     // links can point at the pre-monorepo repos.
-    const prRepo = c.prRepo || repo
-    const enr = await deps.enrich(prRepo, c.pr)
-    if (enr.docsOnly) continue
-    // Mirror the entries gate: only drop when the PR has a positive dir signal
-    // for the OTHER language. Empty/unknown languages (no dir signal, or a
-    // first PR touching only root/ci) are kept — people aren't noise.
-    const langs = enr.languages
-    if (isMonorepoStream && Array.isArray(langs) && langs.length > 0 && !langs.includes(meta.language)) {
-      continue
-    }
+    const enr = await deps.enrich(c.prRepo || repo, c.pr)
+    if (dropFromStream(enr)) continue
     newContributors.push(c)
   }
 
