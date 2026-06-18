@@ -58,6 +58,19 @@ test('truncated compare range yields a warning', async () => {
   assert.match(warning, /250-commit cap/)
 })
 
+test('processes every commit in a large (paginated) range — no downstream cap', async () => {
+  // The client paginates compare; deriveEntries must emit an entry for each of
+  // the >100 commits it returns (guards against a regression to first-page-only).
+  const N = 230
+  const commits = Array.from({ length: N }, (_, i) => ({ sha: `s${i}` }))
+  const client = {
+    compareCommits: async () => ({ commits, truncated: false }),
+    commitPulls: async (_r, sha) => [{ number: Number(sha.slice(1)) + 1, title: `feat: c${sha}`, user: 'a' }],
+  }
+  const { entries } = await deriveEntries({ repo: 'r', base: 'v1', head: 'v2', client })
+  assert.equal(entries.length, N)
+})
+
 // --- previousTagInStream -----------------------------------------------------
 
 const harnessTags = (names) => ({ listTags: async () => names.map((name) => ({ name })) })

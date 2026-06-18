@@ -75,15 +75,30 @@ async function runAction(github, context, core) {
       const tags = await github.paginate(github.rest.repos.listTags, { owner, repo, per_page: 100 })
       return tags.map((t) => ({ name: t.name, commitSha: t.commit && t.commit.sha }))
     },
-    // Merged commits between two tags. GitHub caps a compare at 250 commits;
-    // total_commits tells us when the list is truncated so callers can warn.
+    // Merged commits between two tags. The compare endpoint returns its
+    // `commits` array one 100-item page at a time, so we MUST paginate — a
+    // single call would silently drop every commit past the first 100 and
+    // produce an incomplete changelog. We walk all pages via the iterator
+    // (accumulating commits) and read `total_commits` from the first page to
+    // detect GitHub's hard 250-commit cap, beyond which the range genuinely
+    // can't be fully expanded and callers should warn.
     compareCommits: async (repoFull, base, head) => {
       const { owner, repo } = splitRepo(repoFull)
       try {
-        const res = await github.rest.repos.compareCommitsWithBasehead({ owner, repo, basehead: `${base}...${head}`, per_page: 100 })
-        const data = res.data
-        const commits = (data.commits || []).map((c) => ({ sha: c.sha, message: c.commit && c.commit.message }))
-        return { commits, truncated: typeof data.total_commits === 'number' && data.total_commits > commits.length }
+        const commits = []
+        let total = null
+        for await (const page of github.paginate.iterator(github.rest.repos.compareCommitsWithBasehead, {
+          owner,
+          repo,
+          basehead: `${base}...${head}`,
+          per_page: 100,
+        })) {
+          if (total === null && typeof page.data.total_commits === 'number') total = page.data.total_commits
+          for (const c of page.data.commits || []) commits.push({ sha: c.sha, message: c.commit && c.commit.message })
+        }
+        // total_commits is capped at 250 by GitHub; if it reports more than we
+        // could collect, the tail is genuinely unavailable from this endpoint.
+        return { commits, truncated: typeof total === 'number' && total > commits.length }
       } catch (e) {
         core.warning(`compare ${repoFull} ${base}...${head}: ${e.status || e.message} — no entries derived`)
         return { commits: [], truncated: false }

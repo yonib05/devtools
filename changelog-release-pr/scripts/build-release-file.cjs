@@ -46,16 +46,15 @@ async function buildReleaseFile(repo, release, deps) {
   // 2. Language (monorepo prefixed tags only): those releases list every merged
   //    PR regardless of language, so gate by which SDK dirs the PR touched —
   //    python stream keeps python-touching PRs, ts keeps ts-touching, both →
-  //    both. Unknown file info → kept (degrade open). Pre-monorepo bare-`v` and
-  //    evals are single-language, so no language gate there.
+  //    both. Unknown file info → kept (degrade open).
   //
-  //    CRUCIAL: the dir-based language signal (strands-py/ vs strands-ts/) only
-  //    exists in the monorepo repo itself. Some early python releases were
-  //    re-tagged `python/v*` but their PRs live in the OLD flat `sdk-python`
-  //    repo (code under `src/`, no strands-py/ dir). Gating those by dir would
-  //    see empty languages and wrongly drop EVERY entry, emptying the release.
-  //    So only language-gate a PR when it actually lives in this release's repo
-  //    (prRepo === repo); cross-repo PRs are single-language by provenance.
+  //    CRUCIAL: only gate when the PR has a POSITIVE dir signal — i.e. it
+  //    touches strands-py/ and/or strands-ts/. A PR with EMPTY languages
+  //    (touches neither: root config/CI, or a pre-monorepo flat-layout PR whose
+  //    code lived under src/ before the strands-py/ dir existed) must be KEPT,
+  //    not dropped. Gating on empty languages would wrongly empty pre-monorepo
+  //    releases whose tags were re-applied as python/v* in the monorepo.
+  //    Pre-monorepo bare-`v` and evals are single-language: no language gate.
   const isMonorepoStream =
     meta.sdk === 'harness' &&
     (release.tag_name.startsWith('python/') || release.tag_name.startsWith('typescript/'))
@@ -67,7 +66,7 @@ async function buildReleaseFile(repo, release, deps) {
       ? await deps.enrich(prRepo, p.pr)
       : { areas: [], breaking: false, commit: null, author: null, languages: null, docsOnly: false }
     if (enr.docsOnly) continue
-    if (isMonorepoStream && prRepo === repo && Array.isArray(enr.languages) && !enr.languages.includes(meta.language)) {
+    if (isMonorepoStream && Array.isArray(enr.languages) && enr.languages.length > 0 && !enr.languages.includes(meta.language)) {
       continue
     }
     const breaking = p.breaking || enr.breaking
@@ -100,16 +99,14 @@ async function buildReleaseFile(repo, release, deps) {
     const prRepo = c.prRepo || repo
     const enr = await deps.enrich(prRepo, c.pr)
     if (enr.docsOnly) continue
-    // Only language-gate PRs from the monorepo repo itself (see the entries
-    // gate above — cross-repo PRs have no strands-py/strands-ts dir signal).
-    if (isMonorepoStream && prRepo === repo) {
-      const langs = enr.languages
-      if (!Array.isArray(langs) || langs.length === 0 || langs.includes(meta.language)) {
-        newContributors.push(c)
-      }
-    } else {
-      newContributors.push(c)
+    // Mirror the entries gate: only drop when the PR has a positive dir signal
+    // for the OTHER language. Empty/unknown languages (no dir signal, or a
+    // first PR touching only root/ci) are kept — people aren't noise.
+    const langs = enr.languages
+    if (isMonorepoStream && Array.isArray(langs) && langs.length > 0 && !langs.includes(meta.language)) {
+      continue
     }
+    newContributors.push(c)
   }
 
   const file = {

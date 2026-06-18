@@ -68,9 +68,11 @@ test('monorepo release filters entries by stream language from PR files', async 
     '* feat: py thing by @a in https://github.com/strands-agents/harness-sdk/pull/1',
     '* feat: ts thing by @b in https://github.com/strands-agents/harness-sdk/pull/2',
     '* feat: both thing by @c in https://github.com/strands-agents/harness-sdk/pull/3',
-    '* chore: site thing by @d in https://github.com/strands-agents/harness-sdk/pull/4',
+    '* chore: neither-dir thing by @d in https://github.com/strands-agents/harness-sdk/pull/4',
     '* fix: unknown thing by @e in https://github.com/strands-agents/harness-sdk/pull/5',
   ].join('\n')
+  // 4 = empty languages (touches neither SDK dir — e.g. root/ci, or a flat-layout
+  // pre-monorepo PR). 5 = unknown (files unavailable).
   const langByPr = { 1: ['python'], 2: ['typescript'], 3: ['python', 'typescript'], 4: [], 5: null }
   const deps = {
     enrich: async (_repo, pr) => ({ areas: [], breaking: false, commit: null, author: null, languages: langByPr[pr] }),
@@ -78,19 +80,22 @@ test('monorepo release filters entries by stream language from PR files', async 
   }
   const py = await buildReleaseFile('strands-agents/harness-sdk',
     { tag_name: 'python/v1.43.0', published_at: '2026-06-12T00:00:00Z', html_url: 'h', body }, deps)
-  // python stream: keeps py(1), both(3), unknown(5); drops ts(2) and site-only(4)
+  // python stream keeps py(1), both(3); drops ts(2). Empty-languages(4) and
+  // unknown(5) are KEPT — only a POSITIVE other-language signal drops a PR.
   assert.match(py.contents, /py thing/)
   assert.match(py.contents, /both thing/)
+  assert.match(py.contents, /neither-dir thing/)
   assert.match(py.contents, /unknown thing/)
   assert.doesNotMatch(py.contents, /ts thing/)
-  assert.doesNotMatch(py.contents, /site thing/)
 
   const ts = await buildReleaseFile('strands-agents/harness-sdk',
     { tag_name: 'typescript/v1.5.0', published_at: '2026-06-12T00:00:00Z', html_url: 'h', body }, deps)
-  // typescript stream: keeps ts(2), both(3), unknown(5)
+  // typescript stream: keeps ts(2), both(3), neither-dir(4), unknown(5); drops py(1)
   assert.match(ts.contents, /ts thing/)
   assert.match(ts.contents, /both thing/)
+  assert.match(ts.contents, /neither-dir thing/)
   assert.match(ts.contents, /unknown thing/)
+  assert.doesNotMatch(ts.contents, /py thing/)
   assert.doesNotMatch(ts.contents, /py thing/)
   assert.doesNotMatch(ts.contents, /site thing/)
 })
