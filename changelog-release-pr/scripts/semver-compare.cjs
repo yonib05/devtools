@@ -1,7 +1,9 @@
 // Compare two version strings newest-first, with prerelease (rc) handling.
-// Ported from the docs site's util/changelog.ts compareVersionDesc — kept as a
-// small self-contained copy so this action stays dependency-free (the two
+// Ported from harness-sdk site/src/util/changelog.ts compareVersionDesc — kept
+// as a small self-contained copy so this action stays dependency-free (the two
 // packages don't share a module). Used to find the previous tag in a stream.
+// KEEP IN SYNC with that copy: the ordering rules (esp. prerelease handling)
+// must match, or backfill and the rendered site disagree on release order.
 //
 // Returns <0 if `a` is newer than `b` (so ascending .sort() puts newest first):
 //   1.0.0 > 1.0.0-rc.1 > 1.0.0-rc.0, and 1.10.0 > 1.9.0 (numeric, not lexical).

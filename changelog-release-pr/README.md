@@ -42,6 +42,19 @@ Pipeline (deterministic — no LLM):
 - `strands-agents/evals` `.github/workflows/changelog-sync.yml` — cross-repo
   PR into harness-sdk on each evals release.
 
+## Re-syncing existing files
+
+The daily cron runs with `skip-existing: true`, so it only writes files that
+don't exist yet and never touches committed ones. A full refresh
+(`skip-existing: false`, or a `backfill` dispatch) re-renders **every** release
+through the current renderer. The renderer emits the canonical, fully-expanded
+entry shape (every field present: `breaking`, `commit`, `commitUrl`, …), so the
+first full refresh after any hand-edited or terser committed files will produce
+a large reformat-only diff — frontmatter is rewritten to canonical form even
+where nothing changed semantically. Human-authored `highlights:` and markdown
+bodies are preserved (see below); only the generated frontmatter reformats.
+Expect and skim that churn; it's cosmetic.
+
 ## Tests
 
 ```bash

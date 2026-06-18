@@ -1,14 +1,22 @@
 const { test } = require('node:test')
 const assert = require('node:assert/strict')
 const { buildReleaseFile } = require('./build-release-file.cjs')
-const { parseReleaseBody } = require('./parse-release-body.cjs')
+const { classifyTitle } = require('./parse-release-body.cjs')
 
-// buildReleaseFile now sources entries from deps.deriveEntries (compare-driven)
-// rather than parsing the release body. These tests describe the desired entry
-// set as a bullet body for readability, so this stub turns that body back into
-// the parsed-line shape deriveEntries returns — exercising the same downstream
-// enrichment + gating the real derive feeds.
-const bodyDerive = async (_repo, release) => ({ entries: parseReleaseBody(release.body), warning: undefined })
+// buildReleaseFile sources entries from deps.deriveEntries (compare-driven), not
+// from the release body. These tests describe the desired entry set as a bullet
+// body for readability; this local helper turns that bullet body into the
+// parsed-line shape deriveEntries returns, so the tests exercise the same
+// downstream enrichment + gating the real derive feeds. (It is NOT the
+// production path — that reads the compare API.)
+const BULLET = /^\s*[-*]\s+(.*?)(?:\s+by\s+@([\w-]+(?:\[[\w-]+\])?))?\s+in\s+https?:\/\/github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)\s*$/
+const parseBulletBody = (body) =>
+  String(body || '')
+    .split('\n')
+    .map((line) => line.match(BULLET))
+    .filter((m) => m && !/made their first contribution/.test(m[0]))
+    .map((m) => ({ ...classifyTitle(m[1]), author: m[2] || null, pr: Number(m[4]), prRepo: m[3] }))
+const bodyDerive = async (_repo, release) => ({ entries: parseBulletBody(release.body), warning: undefined })
 
 const release = {
   tag_name: 'python/v1.42.0',
