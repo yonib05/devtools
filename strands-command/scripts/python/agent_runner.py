@@ -17,7 +17,7 @@ from strands.telemetry import StrandsTelemetry
 from strands.agent.conversation_manager import SlidingWindowConversationManager
 from strands.session import S3SessionManager
 from strands.models import BedrockModel, CacheConfig
-from strands.vended_plugins.context_offloader import ContextOffloader, InMemoryStorage
+from strands.vended_plugins.context_offloader import ContextOffloader, S3Storage
 from botocore.config import Config
 
 from strands_tools import http_request, shell
@@ -233,9 +233,13 @@ def run_agent(query: str):
         # Offload oversized tool results (large PR diffs, file reads, shell output)
         # to storage instead of letting them crowd out the context window. The
         # plugin registers a retrieval tool so the agent can fetch the full content
-        # on demand. In-memory storage is sufficient: the agent runs as a single
-        # process per invocation, so offloaded content only needs to outlive the run.
-        context_offloader = ContextOffloader(storage=InMemoryStorage())
+        # on demand. Use S3 storage rather than in-memory: the offloaded result is
+        # replaced in the conversation with a storage reference that the session
+        # manager persists, so a resumed session must still be able to resolve that
+        # reference in a later process — which in-memory storage could not.
+        context_offloader = ContextOffloader(
+            storage=S3Storage(bucket=s3_bucket, prefix=f"{s3_prefix}/offload"),
+        )
 
         # Create agent with optional trace attributes for Langfuse
         agent_kwargs = {
