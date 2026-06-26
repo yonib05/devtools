@@ -7,6 +7,7 @@ accept labels from the configured allowlist. No Bedrock call is made.
 import pytest
 from pydantic import ValidationError
 
+import classify
 from classify import build_classification_model, build_system_prompt, parse_field_config, parse_label_type_map, parse_native_ids, sanitize, select_option, select_type
 
 
@@ -115,3 +116,42 @@ def test_select_option_returns_first_mapped_label():
     option_map = {"python": "Python", "typescript": "TypeScript"}
     assert select_option(["typescript"], option_map) == "TypeScript"
     assert select_option(["rust"], option_map) is None
+
+
+def test_apply_native_targets_sets_type_and_field(monkeypatch):
+    calls = {}
+    monkeypatch.setattr(classify, "resolve_native_ids", lambda repo: {
+        "types": {"bug": "IT_bug", "feature": "IT_feature"},
+        "fields": {"language": {"id": "IFSS_lang", "options": {"python": "OPT_py"}}},
+    })
+    monkeypatch.setattr(classify, "get_issue_node_id", lambda n, repo: "ISSUE_NODE")
+    monkeypatch.setattr(classify, "set_issue_type", lambda node, tid: calls.__setitem__("type", (node, tid)))
+    monkeypatch.setattr(classify, "set_issue_field", lambda node, fid, oid: calls.__setitem__("field", (node, fid, oid)))
+
+    classify.apply_native_targets(
+        "12", "o/r",
+        labels=["bug", "python"],
+        type_map={"bug": "Bug", "enhancement": "Feature"},
+        field_config={"name": "Language", "option_map": {"python": "Python"}},
+    )
+    assert calls["type"] == ("ISSUE_NODE", "IT_bug")
+    assert calls["field"] == ("ISSUE_NODE", "IFSS_lang", "OPT_py")
+
+
+def test_apply_native_targets_warns_and_skips_unknown_name(monkeypatch, capsys):
+    monkeypatch.setattr(classify, "resolve_native_ids", lambda repo: {"types": {}, "fields": {}})
+    monkeypatch.setattr(classify, "get_issue_node_id", lambda n, repo: "ISSUE_NODE")
+    monkeypatch.setattr(classify, "set_issue_type", lambda node, tid: pytest.fail("should not set"))
+    monkeypatch.setattr(classify, "set_issue_field", lambda node, fid, oid: pytest.fail("should not set"))
+
+    classify.apply_native_targets(
+        "12", "o/r", labels=["bug"],
+        type_map={"bug": "Bug"}, field_config=None,
+    )
+    assert "::warning::" in capsys.readouterr().out
+
+
+def test_apply_native_targets_noops_when_no_mapping_matches(monkeypatch):
+    monkeypatch.setattr(classify, "resolve_native_ids", lambda repo: pytest.fail("should not resolve"))
+    # No type_map and no field_config -> nothing to do, must not even resolve.
+    classify.apply_native_targets("12", "o/r", labels=["bug"], type_map={}, field_config=None)
