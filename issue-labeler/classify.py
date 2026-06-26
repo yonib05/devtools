@@ -197,7 +197,7 @@ def set_issue_field(node_id: str, field_id: str, option_id: str) -> None:
         print(f"Set issue field {field_id}: {option_id}")
 
 
-def apply_native_targets(issue_number, repo, labels, type_map, field_config) -> None:
+def apply_native_targets(issue_number: str, repo: str, labels: list, type_map: dict, field_config: dict | None, *, native: dict | None = None) -> None:
     """Map classified labels to a native issue type / field option and apply them.
 
     No-ops (without any network calls) when neither a type nor a field mapping
@@ -210,7 +210,8 @@ def apply_native_targets(issue_number, repo, labels, type_map, field_config) -> 
     if wanted_type is None and wanted_option is None:
         return
 
-    native = resolve_native_ids(repo)
+    if native is None:
+        native = resolve_native_ids(repo)
     node_id = get_issue_node_id(issue_number, repo)
     if not node_id:
         return
@@ -238,7 +239,7 @@ def build_system_prompt(config: dict, max_labels: int) -> str:
     """Build the classification prompt from config."""
     label_lines = []
     for label_name, label_def in config["labels"].items():
-        description = label_def if isinstance(label_def, str) else label_def.get("description", "")
+        description = label_def if isinstance(label_def, str) else _label_def_dict(label_def).get("description", "")
         label_lines.append(f"- {label_name}: {description}")
 
     labels_block = "\n".join(label_lines)

@@ -28,6 +28,8 @@ from classify import (
     parse_label_type_map,
     resolve_native_ids,
     sanitize,
+    select_option,
+    select_type,
 )
 
 
@@ -92,6 +94,9 @@ def main():
     issues = list_issues(args.repo, args.state)
     print(f"Backfilling {len(issues)} issue(s) on {args.repo} (dry_run={args.dry_run})")
 
+    # Resolve native type/field IDs once for the whole run (same for every issue).
+    native = resolve_native_ids(args.repo)
+
     for issue in issues:
         number = str(issue["number"])
         title = sanitize(issue.get("title", ""), 200)
@@ -120,12 +125,15 @@ def main():
             continue
 
         if args.dry_run:
-            wanted_type = type_map.get(effective_labels[0]) if type_map else None
+            wanted_type = select_type(effective_labels, type_map) if type_map else None
+            wanted_option = (
+                select_option(effective_labels, field_config["option_map"]) if field_config else None
+            )
             print(f"#{number}: would apply labels={effective_labels} "
-                  f"type={wanted_type} (field via {field_config['name'] if field_config else None})")
+                  f"type={wanted_type} field={wanted_option}")
             continue
 
-        apply_native_targets(number, args.repo, effective_labels, type_map, field_config)
+        apply_native_targets(number, args.repo, effective_labels, type_map, field_config, native=native)
         print(f"#{number}: applied")
 
 

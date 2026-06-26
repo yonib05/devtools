@@ -141,8 +141,7 @@ labels:
 Names (`Bug`, `Language`, `Python`) are resolved to GitHub node IDs at runtime
 via a repo-level GraphQL query and matched case-insensitively. Unmatched names
 emit a warning and are skipped, and never fail the workflow. Existing values
-are always overwritten. The action's existing `issues: write` permission is
-sufficient.
+are always overwritten. The action's existing `issues: write` permission is expected to cover these mutations; verify against a test issue before rolling out broadly.
 
 ## Inputs
 

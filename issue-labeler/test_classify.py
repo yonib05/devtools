@@ -8,7 +8,16 @@ import pytest
 from pydantic import ValidationError
 
 import classify
-from classify import build_classification_model, build_system_prompt, parse_field_config, parse_label_type_map, parse_native_ids, sanitize, select_option, select_type
+from classify import (
+    build_classification_model,
+    build_system_prompt,
+    parse_field_config,
+    parse_label_type_map,
+    parse_native_ids,
+    sanitize,
+    select_option,
+    select_type,
+)
 
 
 def test_accepts_allowlisted_labels():
@@ -155,3 +164,16 @@ def test_apply_native_targets_noops_when_no_mapping_matches(monkeypatch):
     monkeypatch.setattr(classify, "resolve_native_ids", lambda repo: pytest.fail("should not resolve"))
     # No type_map and no field_config -> nothing to do, must not even resolve.
     classify.apply_native_targets("12", "o/r", labels=["bug"], type_map={}, field_config=None)
+
+
+def test_apply_native_targets_uses_provided_native_without_resolving(monkeypatch):
+    calls = {}
+    monkeypatch.setattr(classify, "resolve_native_ids", lambda repo: pytest.fail("should not resolve when native provided"))
+    monkeypatch.setattr(classify, "get_issue_node_id", lambda n, repo: "ISSUE_NODE")
+    monkeypatch.setattr(classify, "set_issue_type", lambda node, tid: calls.__setitem__("type", (node, tid)))
+    monkeypatch.setattr(classify, "set_issue_field", lambda node, fid, oid: pytest.fail("no field expected"))
+    classify.apply_native_targets(
+        "12", "o/r", labels=["bug"], type_map={"bug": "Bug"}, field_config=None,
+        native={"types": {"bug": "IT_bug"}, "fields": {}},
+    )
+    assert calls["type"] == ("ISSUE_NODE", "IT_bug")
