@@ -102,6 +102,7 @@ labels:
     description: "Model providers (Bedrock, OpenAI, Anthropic, Ollama)"
   # Shorthand form:
   area-tool: "Tool behavior, execution, @tool decorator"
+```
 
 ### Setting native issue type and issue fields (issues only)
 
