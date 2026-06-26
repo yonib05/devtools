@@ -106,7 +106,7 @@ labels:
 ### Setting native issue type and issue fields (issues only)
 
 In addition to labels, the action can set the org's native **issue type** and a
-single-select **issue field** — but only when triggered by an `issues` event
+single-select **issue field**, but only when triggered by an `issues` event
 (these features do not apply to pull requests). This is additive: labels are
 still applied exactly as before.
 
@@ -139,10 +139,9 @@ labels:
 
 Names (`Bug`, `Language`, `Python`) are resolved to GitHub node IDs at runtime
 via a repo-level GraphQL query and matched case-insensitively. Unmatched names
-emit a warning and are skipped — they never fail the workflow. Existing values
+emit a warning and are skipped, and never fail the workflow. Existing values
 are always overwritten. The action's existing `issues: write` permission is
 sufficient.
-```
 
 ## Inputs
 
