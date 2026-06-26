@@ -177,3 +177,35 @@ def test_apply_native_targets_uses_provided_native_without_resolving(monkeypatch
         native={"types": {"bug": "IT_bug"}, "fields": {}},
     )
     assert calls["type"] == ("ISSUE_NODE", "IT_bug")
+
+
+def test_main_native_block_failure_does_not_fail_workflow(monkeypatch, tmp_path, capsys):
+    """The additive native-targets block must never fail the run: a raising
+    apply_native_targets is downgraded to a warning, and main() still exits 0
+    after writing its label output."""
+    config = tmp_path / "type.yml"
+    config.write_text('labels:\n  bug:\n    description: "broken"\n    type: Bug\n')
+    output = tmp_path / "gh_output"
+
+    monkeypatch.setenv("CONFIG_PATH", str(config))
+    monkeypatch.setenv("GH_REPO", "o/r")
+    monkeypatch.setenv("ISSUE_TITLE", "something broke")
+    monkeypatch.setenv("ISSUE_BODY", "details")
+    monkeypatch.setenv("ISSUE_NUMBER", "7")
+    monkeypatch.setenv("EVENT_NAME", "issues")
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output))
+
+    monkeypatch.setattr(classify, "classify_issue", lambda *a, **k: ["bug"])
+    monkeypatch.setattr(classify, "apply_labels", lambda n, labels: None)
+
+    def boom(*a, **k):
+        raise RuntimeError("simulated API/permission failure")
+
+    monkeypatch.setattr(classify, "apply_native_targets", boom)
+
+    # Must return normally (no exception, no non-zero SystemExit).
+    classify.main()
+
+    out = capsys.readouterr().out
+    assert "::warning::Native type/field update skipped" in out
+    assert "labels=bug" in output.read_text()

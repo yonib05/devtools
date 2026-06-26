@@ -372,12 +372,18 @@ def main():
     apply_labels(issue_number, labels)
 
     # Additive: for issues only, also set native issue type / language field.
+    # Best-effort and strictly non-fatal: labels are already applied above, so
+    # any failure here (missing gh, malformed field config, API/permission
+    # error) is downgraded to a warning rather than failing the workflow.
     event_name = os.environ.get("EVENT_NAME", "")
     if event_name == "issues":
-        type_map = parse_label_type_map(config)
-        field_config = parse_field_config(config)
-        if type_map or field_config:
-            apply_native_targets(issue_number, repo, labels, type_map, field_config)
+        try:
+            type_map = parse_label_type_map(config)
+            field_config = parse_field_config(config)
+            if type_map or field_config:
+                apply_native_targets(issue_number, repo, labels, type_map, field_config)
+        except (Exception, SystemExit) as e:  # noqa: BLE001 - additive step must never fail the workflow
+            print(f"::warning::Native type/field update skipped: {e}")
 
     # Write output for downstream steps
     with open(os.environ["GITHUB_OUTPUT"], "a") as f:
