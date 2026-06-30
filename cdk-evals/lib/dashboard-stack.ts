@@ -31,7 +31,7 @@ function fetchAuthCredentials(): { username: string; password: string } | null {
     );
     return JSON.parse(result.trim());
   } catch {
-    console.log(`Secret "${SECRET_NAME}" not found or not accessible. Using placeholders.`);
+    console.log(`Secret "${SECRET_NAME}" not found or not accessible.`);
     console.log('Create the secret first with: aws secretsmanager create-secret --name "strands-evals/dashboard-auth" --secret-string \'{"username":"your-user","password":"your-pass"}\'');
     return null;
   }
@@ -52,10 +52,17 @@ export class DashboardStack extends cdk.Stack {
       encryption: s3.BucketEncryption.S3_MANAGED,
     });
 
-    // Fetch credentials from Secrets Manager at synth time
+    // Fetch credentials from Secrets Manager at synth time.
+    // Deny deployment when credentials are unavailable so the dashboard is
+    // never served with anything other than the configured secret values.
     const credentials = fetchAuthCredentials();
-    const username = credentials?.username ?? "__PLACEHOLDER_USERNAME__";
-    const password = credentials?.password ?? "__PLACEHOLDER_PASSWORD__";
+    if (!credentials?.username || !credentials?.password) {
+      throw new Error(
+        `Dashboard auth credentials are unavailable. Create the secret "${SECRET_NAME}" before deploying:\n` +
+          `aws secretsmanager create-secret --name "${SECRET_NAME}" --secret-string '{"username":"your-username","password":"your-password"}'`
+      );
+    }
+    const { username, password } = credentials;
 
     // Read the Lambda template and inject credentials
     const lambdaTemplatePath = path.join(__dirname, "../lambda/basic-auth/index.js");
