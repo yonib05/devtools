@@ -13,8 +13,11 @@ const SECRET_NAME = "strands-evals/dashboard-auth";
 
 /**
  * Fetches auth credentials from Secrets Manager at synth time.
- * Creates the secret with default values if it doesn't exist.
- * Returns { username, password } or null if in CI/bootstrap mode.
+ * Returns { username, password } when the secret is readable. Returns null
+ * only when the secret is unreadable/absent or when running in bootstrap/skip
+ * mode. The secret is never created and no default values are supplied. When
+ * this returns null the caller throws (fail-closed) so deployment is denied
+ * unless real credentials are available.
  */
 function fetchAuthCredentials(): { username: string; password: string } | null {
   // Skip fetching during bootstrap or when AWS credentials aren't available
@@ -68,10 +71,14 @@ export class DashboardStack extends cdk.Stack {
     const lambdaTemplatePath = path.join(__dirname, "../lambda/basic-auth/index.js");
     const lambdaTemplate = fs.readFileSync(lambdaTemplatePath, "utf-8");
 
-    // Replace placeholders with actual credentials
+    // Replace placeholders with JSON-encoded string literals. JSON.stringify
+    // safely escapes quotes, backslashes, backticks, and ${...} sequences so a
+    // credential value cannot corrupt or inject code into the generated Lambda.
+    // Use function replacers so "$" sequences in the JSON-encoded credential
+    // are inserted literally rather than interpreted by String.replace.
     const lambdaCode = lambdaTemplate
-      .replace("__BASIC_AUTH_USERNAME__", username)
-      .replace("__BASIC_AUTH_PASSWORD__", password);
+      .replace("__BASIC_AUTH_USERNAME__", () => JSON.stringify(username))
+      .replace("__BASIC_AUTH_PASSWORD__", () => JSON.stringify(password));
 
     // Lambda@Edge for Basic Authentication with injected credentials
     const basicAuthFunction = new cloudfront.experimental.EdgeFunction(
