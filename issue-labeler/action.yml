@@ -92,6 +92,11 @@ runs:
         ISSUE_TITLE: ${{ github.event.issue.title || github.event.pull_request.title }}
         ISSUE_BODY: ${{ github.event.issue.body || github.event.pull_request.body }}
         ISSUE_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
+        # Set only when the event payload carries a real issue (issue_comment
+        # events on PRs also expose github.event.issue, so exclude those):
+        # gates the native type/field update and saves classify.py a lookup
+        # for the node ID that mutations need.
+        ISSUE_NODE_ID: ${{ (!github.event.issue.pull_request && github.event.issue.node_id) || '' }}
         GH_TOKEN: ${{ github.token }}
         GH_REPO: ${{ github.repository }}
         CONFIG_PATH: ${{ steps.config.outputs.path }}
@@ -99,5 +104,4 @@ runs:
         AWS_REGION: ${{ inputs.aws_region }}
         MAX_LABELS: ${{ inputs.max_labels }}
         MAX_BODY_LENGTH: ${{ inputs.max_body_length }}
-        EVENT_NAME: ${{ github.event_name }}
       run: python3 "${{ github.action_path }}/classify.py"

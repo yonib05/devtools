@@ -107,9 +107,9 @@ labels:
 ### Setting native issue type and issue fields (issues only)
 
 In addition to labels, the action can set the org's native **issue type** and a
-single-select **issue field**, but only when triggered by an `issues` event
-(these features do not apply to pull requests). This is additive: labels are
-still applied exactly as before.
+single-select **issue field**, whenever the triggering event carries an issue
+payload (these features do not apply to pull requests). This is additive:
+labels are still applied exactly as before.
 
 Add a `type:` key to a label to map it to a native issue type:
 
@@ -139,9 +139,12 @@ labels:
 ```
 
 Names (`Bug`, `Language`, `Python`) are resolved to GitHub node IDs at runtime
-via a repo-level GraphQL query and matched case-insensitively. Unmatched names
-emit a warning and are skipped, and never fail the workflow. Existing values
-are always overwritten. The action's existing `issues: write` permission is expected to cover these mutations; verify against a test issue before rolling out broadly.
+via a repo-level GraphQL query and matched case-insensitively. A malformed
+`field:` block fails the run (like a malformed `labels:` block); after that,
+unmatched names or API errors emit a warning and are skipped, and never fail
+the workflow. Existing values are always overwritten. The action's existing
+`issues: write` permission is expected to cover these mutations; verify
+against a test issue before rolling out broadly.
 
 ## Inputs
 
@@ -174,8 +177,11 @@ are always overwritten. The action's existing `issues: write` permission is expe
 
 `backfill.py` applies the same native type/field logic to existing issues. For
 each issue it reuses an existing type/language label when present, and only
-calls the LLM for issues missing one. Run locally with `gh` authenticated and
-AWS credentials available:
+calls the LLM for issues missing one; freshly classified labels are applied to
+the issue so re-runs reuse them. The run aborts up front if the configured
+type/field/option names don't resolve on the repo, and exits non-zero listing
+any issues whose updates failed. Run locally with `gh` authenticated and AWS
+credentials available:
 
 ```bash
 pip install --upgrade strands-agents pyyaml "boto3>=1.35.0"

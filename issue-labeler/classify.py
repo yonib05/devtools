@@ -69,8 +69,7 @@ def parse_field_config(config: dict) -> dict | None:
         return None
 
     if not isinstance(field_block, dict) or not field_block.get("name"):
-        print("::error::Config 'field' must be a mapping with a non-empty 'name'.")
-        sys.exit(1)
+        raise ValueError("Config 'field' must be a mapping with a non-empty 'name'.")
 
     option_map = {}
     for label_name, label_def in config["labels"].items():
@@ -99,20 +98,19 @@ def parse_native_ids(graphql_data: dict) -> dict:
     return {"types": types, "fields": fields}
 
 
-def select_type(labels: list, type_map: dict) -> str | None:
-    """First classified label that maps to a native type name."""
+def select_mapped(labels: list, mapping: dict) -> str | None:
+    """Value for the first label present in `mapping`, or None."""
     for label in labels:
-        if label in type_map:
-            return type_map[label]
+        if label in mapping:
+            return mapping[label]
     return None
 
 
-def select_option(labels: list, option_map: dict) -> str | None:
-    """First classified label that maps to a field option name."""
-    for label in labels:
-        if label in option_map:
-            return option_map[label]
-    return None
+def select_native_targets(labels: list, type_map: dict, field_config: dict | None) -> tuple[str | None, str | None]:
+    """Resolve classified labels to (native type name, field option name)."""
+    wanted_type = select_mapped(labels, type_map)
+    wanted_option = select_mapped(labels, field_config["option_map"]) if field_config else None
+    return wanted_type, wanted_option
 
 
 _RESOLVE_QUERY = """
@@ -133,14 +131,11 @@ query($owner: String!, $name: String!) {
 def resolve_native_ids(repo: str) -> dict:
     """Query repo-level issue types and single-select fields, return name->ID maps."""
     owner, name = repo.split("/", 1)
-    result = subprocess.run(
-        ["gh", "api", "graphql",
-         "-f", f"query={_RESOLVE_QUERY}",
-         "-F", f"owner={owner}", "-F", f"name={name}"],
-        capture_output=True, text=True,
+    result = _gh_graphql(
+        _RESOLVE_QUERY, "Failed to resolve native type/field IDs",
+        owner=owner, name=name,
     )
-    if result.returncode != 0:
-        print(f"::warning::Failed to resolve native type/field IDs: {result.stderr}")
+    if result is None:
         return {"types": {}, "fields": {}}
     try:
         data = json.loads(result.stdout)["data"]
@@ -162,77 +157,89 @@ def get_issue_node_id(issue_number: str, repo: str) -> str | None:
     return result.stdout.strip() or None
 
 
-def set_issue_type(node_id: str, type_id: str) -> None:
+def _gh_graphql(query: str, warn_prefix: str, **variables) -> subprocess.CompletedProcess | None:
+    """Run a gh GraphQL call; on failure print a ::warning:: and return None."""
+    cmd = ["gh", "api", "graphql", "-f", f"query={query}"]
+    for key, value in variables.items():
+        cmd += ["-F", f"{key}={value}"]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        print(f"::warning::{warn_prefix}: {result.stderr}")
+        return None
+    return result
+
+
+def set_issue_type(node_id: str, type_id: str) -> bool:
     mutation = (
         "mutation($issueId: ID!, $typeId: ID!) {"
         " updateIssueIssueType(input: {issueId: $issueId, issueTypeId: $typeId})"
         " { issue { id } } }"
     )
-    result = subprocess.run(
-        ["gh", "api", "graphql", "-f", f"query={mutation}",
-         "-F", f"issueId={node_id}", "-F", f"typeId={type_id}"],
-        capture_output=True, text=True,
-    )
-    if result.returncode != 0:
-        print(f"::warning::Failed to set issue type: {result.stderr}")
-    else:
-        print(f"Set issue type: {type_id}")
+    result = _gh_graphql(mutation, "Failed to set issue type", issueId=node_id, typeId=type_id)
+    if result is None:
+        return False
+    print(f"Set issue type: {type_id}")
+    return True
 
 
-def set_issue_field(node_id: str, field_id: str, option_id: str) -> None:
+def set_issue_field(node_id: str, field_id: str, option_id: str) -> bool:
     mutation = (
         "mutation($issueId: ID!, $fieldId: ID!, $optionId: ID!) {"
         " setIssueFieldValue(input: {issueId: $issueId,"
         " issueFields: [{fieldId: $fieldId, singleSelectOptionId: $optionId}]})"
         " { issue { id } } }"
     )
-    result = subprocess.run(
-        ["gh", "api", "graphql", "-f", f"query={mutation}",
-         "-F", f"issueId={node_id}", "-F", f"fieldId={field_id}", "-F", f"optionId={option_id}"],
-        capture_output=True, text=True,
+    result = _gh_graphql(
+        mutation, "Failed to set issue field",
+        issueId=node_id, fieldId=field_id, optionId=option_id,
     )
-    if result.returncode != 0:
-        print(f"::warning::Failed to set issue field: {result.stderr}")
-    else:
-        print(f"Set issue field {field_id}: {option_id}")
+    if result is None:
+        return False
+    print(f"Set issue field {field_id}: {option_id}")
+    return True
 
 
-def apply_native_targets(issue_number: str, repo: str, labels: list, type_map: dict, field_config: dict | None, *, native: dict | None = None) -> None:
+def apply_native_targets(issue_number: str, repo: str, labels: list, type_map: dict, field_config: dict | None, *, native: dict | None = None, node_id: str | None = None) -> bool:
     """Map classified labels to a native issue type / field option and apply them.
 
     No-ops (without any network calls) when neither a type nor a field mapping
-    could match the classified labels.
+    could match the classified labels. Returns True only if every wanted
+    mutation succeeded.
     """
-    wanted_type = select_type(labels, type_map) if type_map else None
-    wanted_option = (
-        select_option(labels, field_config["option_map"]) if field_config else None
-    )
+    wanted_type, wanted_option = select_native_targets(labels, type_map, field_config)
     if wanted_type is None and wanted_option is None:
-        return
+        return True
 
     if native is None:
         native = resolve_native_ids(repo)
-    node_id = get_issue_node_id(issue_number, repo)
+    if node_id is None:
+        node_id = get_issue_node_id(issue_number, repo)
     if not node_id:
-        return
+        return False
 
+    ok = True
     if wanted_type is not None:
         type_id = native["types"].get(wanted_type.lower())
         if type_id:
-            set_issue_type(node_id, type_id)
+            ok = set_issue_type(node_id, type_id) and ok
         else:
             print(f"::warning::No native issue type named '{wanted_type}' found on {repo}.")
+            ok = False
 
     if wanted_option is not None:
         field = native["fields"].get(field_config["name"].lower())
         if not field:
             print(f"::warning::No single-select issue field named '{field_config['name']}' found on {repo}.")
+            ok = False
         else:
             option_id = field["options"].get(wanted_option.lower())
             if option_id:
-                set_issue_field(node_id, field["id"], option_id)
+                ok = set_issue_field(node_id, field["id"], option_id) and ok
             else:
                 print(f"::warning::No option '{wanted_option}' on field '{field_config['name']}'.")
+                ok = False
+
+    return ok
 
 
 def build_system_prompt(config: dict, max_labels: int) -> str:
@@ -323,9 +330,8 @@ def classify_issue(title: str, body: str, system_prompt: str, valid_labels: froz
     return labels[:max_labels]
 
 
-def apply_labels(issue_number: str, labels: list[str]) -> None:
+def apply_labels(issue_number: str, labels: list[str], repo: str) -> bool:
     """Apply labels to the issue using gh CLI."""
-    repo = os.environ["GH_REPO"]
     label_csv = ",".join(labels)
 
     print(f"Applying labels to issue #{issue_number}: {label_csv}")
@@ -337,7 +343,8 @@ def apply_labels(issue_number: str, labels: list[str]) -> None:
 
     if result.returncode != 0:
         print(f"::error::Failed to apply labels: {result.stderr}")
-        sys.exit(1)
+        return False
+    return True
 
 
 def main():
@@ -347,6 +354,16 @@ def main():
     repo = os.environ["GH_REPO"]
 
     config = load_config(config_path)
+
+    # Validate the native type/field config up front, so a malformed `field:`
+    # block fails the run loudly (like a malformed `labels:` block) instead of
+    # being swallowed by the best-effort mutation step below.
+    type_map = parse_label_type_map(config)
+    try:
+        field_config = parse_field_config(config)
+    except ValueError as e:
+        print(f"::error::{e}")
+        sys.exit(1)
 
     valid_labels = frozenset(config["labels"].keys())
     print(f"Loaded {len(valid_labels)} valid labels: {sorted(valid_labels)}")
@@ -369,21 +386,24 @@ def main():
         print("No valid labels identified, skipping.")
         sys.exit(0)
 
-    apply_labels(issue_number, labels)
+    if not apply_labels(issue_number, labels, repo):
+        sys.exit(1)
 
     # Additive: for issues only, also set native issue type / language field.
+    # ISSUE_NODE_ID is set by action.yml only when the event payload carries a
+    # real issue (any issue event, not just `issues`), so PRs are excluded.
     # Best-effort and strictly non-fatal: labels are already applied above, so
-    # any failure here (missing gh, malformed field config, API/permission
-    # error) is downgraded to a warning rather than failing the workflow.
-    event_name = os.environ.get("EVENT_NAME", "")
-    if event_name == "issues":
-        try:
-            type_map = parse_label_type_map(config)
-            field_config = parse_field_config(config)
-            if type_map or field_config:
-                apply_native_targets(issue_number, repo, labels, type_map, field_config)
-        except (Exception, SystemExit) as e:  # noqa: BLE001 - additive step must never fail the workflow
-            print(f"::warning::Native type/field update skipped: {e}")
+    # any failure here (missing gh, API/permission error) is downgraded to a
+    # warning rather than failing the workflow.
+    if type_map or field_config:
+        node_id = os.environ.get("ISSUE_NODE_ID", "")
+        if not node_id:
+            print("Event does not target an issue; skipping native type/field update.")
+        else:
+            try:
+                apply_native_targets(issue_number, repo, labels, type_map, field_config, node_id=node_id)
+            except Exception as e:  # noqa: BLE001 - additive step must never fail the workflow
+                print(f"::warning::Native type/field update skipped: {e}")
 
     # Write output for downstream steps
     with open(os.environ["GITHUB_OUTPUT"], "a") as f:
